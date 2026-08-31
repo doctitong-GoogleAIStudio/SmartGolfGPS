@@ -110,7 +110,7 @@ export function ActivationView({ onClose }: { onClose?: () => void }) {
 
         <View style={styles.qrWrap} testID="gcash-qr">
           <GCashQR />
-          <Text style={styles.qrHint}>Scan with GCash to pay</Text>
+          <Text style={styles.qrHint}>Scan with your GCash app to pay ₱1,500</Text>
         </View>
 
         <Text style={styles.section}>GCASH REFERENCE NUMBER</Text>
@@ -208,7 +208,7 @@ const styles = StyleSheet.create({
   stepNumTxt: { color: "#fff", fontWeight: "900", fontSize: 13 },
   stepTxt: { color: "rgba(255,255,255,0.85)", fontSize: 13, flex: 1, lineHeight: 18 },
   qrWrap: { alignItems: "center", marginTop: 16 },
-  qr: { width: 200, height: 200, borderRadius: 16, backgroundColor: "#fff" },
+  qr: { width: 240, aspectRatio: 998 / 2000, borderRadius: 16, backgroundColor: "#0A5AE0" },
   qrPlaceholder: { alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: colors.zinc300, borderStyle: "dashed" },
   qrPlaceholderTxt: { color: colors.zinc500, fontWeight: "800", marginTop: 8 },
   qrPlaceholderSub: { color: colors.zinc400, fontSize: 11, marginTop: 2 },

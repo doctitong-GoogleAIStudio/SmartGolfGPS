@@ -47,9 +47,16 @@ Expo/React Native app at /app/mobile reusing the SAME FastAPI backend (no backen
 - Offline device-locked codes: code = SHA-256(normalize(deviceId)+"|"+SECRET) -> first 16 hex, XXXX-XXXX-XXXX-XXXX. Same algo in app (src/lib/license.ts) and the standalone generator (/app/tools/activation-generator.html).
 - Flow: show Device ID -> pay via GCash (QR at /app/mobile/assets/images/gcash-qr.png, PLACEHOLDER to replace) -> "Email Device ID" opens mail to docvincent2022@yahoo.com with Device ID + GCash ref -> owner generates code offline -> user enters code -> permanent unlock. SECRET in test_credentials.md.
 
+### Mobile enhancements (2026-06, iteration_3 — all 4 PASS)
+- GCash QR: real SmartGolf ₱1,500 GCash QR on the Activation screen (/app/mobile/assets/images/gcash-qr.png).
+- Weather On Card: live wind arrow + temperature on the Rangefinder distance card when Auto Weather is on.
+- Putt Reminder: leaving the green during a round without logged putts shows a prompt to log putts (0-4) -> PUT /api/rounds/{id}. GPS-dependent (needs device/native for live trigger).
+- Voice Caddie: speaker button speaks the live shot summary aloud via expo-speech (TTS, hands-free, no mic; works in Expo Go).
+
 ## Test Status
 iteration_1: backend 13/13 pass, web frontend 100%.
-iteration_2 (mobile): 100% pass — all 12 mobile flows + backend regression (13/13 pytest). Activation flow (invalid reject + valid unlock) verified end-to-end. Only a cosmetic RN-Web shadow-prop deprecation warning (web-only, native unaffected). Report: /app/test_reports/iteration_2.json.
+iteration_2 (mobile): 100% pass — all 12 mobile flows + backend regression (13/13). Activation verified end-to-end. Report: /app/test_reports/iteration_2.json.
+iteration_3 (mobile enhancements): 4/4 PASS (GCash QR, Weather On Card, Voice Caddie, Putt Reminder). Report: /app/test_reports/iteration_3.json.
 
 ## Notes for next agent
 - Frontend GPS testing: grant geolocation + set_geolocation(7.0545, 125.5195) before nav; viewport 390x844

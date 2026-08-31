@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, Pressable, ScrollView, Modal, TextInput } from 
 import { useRouter, useFocusEffect } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import * as Speech from "expo-speech";
 import { colors, font } from "@/src/theme";
 import { GolfMap } from "@/src/components/GolfMap";
 import { useGPS } from "@/src/hooks/useGPS";
@@ -54,6 +55,13 @@ export default function Rangefinder() {
   const [holeSuggestion, setHoleSuggestion] = useState<{ i: number; d: number } | null>(null);
   const [camMode, setCamMode] = useState<"free" | "follow" | "heading">("free");
   const [gpsPath, setGpsPath] = useState<{ lat: number; lng: number; t: number }[]>([]);
+  const [speaking, setSpeaking] = useState(false);
+  const [roundScores, setRoundScores] = useState<any[] | null>(null);
+  const [puttReminder, setPuttReminder] = useState<{ holeNumber: number } | null>(null);
+  const [puttDraft, setPuttDraft] = useState(2);
+
+  const nearGreenRef = useRef(false);
+  const puttDismissedRef = useRef<Set<number>>(new Set());
 
   const wxReqRef = useRef<{ pos: LatLng | null; time: number }>({ pos: null, time: 0 });
   const pathBufRef = useRef<{ lat: number; lng: number; t: number }[]>([]);
@@ -212,6 +220,67 @@ export default function Rangefinder() {
       }
     });
   }, [activeRound]);
+
+  // Load current round scores (for the putt reminder).
+  useEffect(() => {
+    if (!activeRound) { setRoundScores(null); return; }
+    api.get(`/rounds/${activeRound.id}`).then((r) => setRoundScores(r.scores)).catch(() => {});
+  }, [activeRound]);
+
+  // Putt reminder: when the golfer leaves the green without logging putts.
+  useEffect(() => {
+    if (!gpsPos || !activeRound || !hole?.greenCenter || !roundScores) return;
+    const d = haversineMeters(gpsPos, hole.greenCenter) as number;
+    if (d < 18) {
+      nearGreenRef.current = true;
+    } else if (d > 35 && nearGreenRef.current) {
+      nearGreenRef.current = false;
+      const sc = roundScores.find((s: any) => s.hole === hole.holeNumber);
+      if (sc && sc.putts == null && !puttDismissedRef.current.has(hole.holeNumber)) {
+        setPuttDraft(2);
+        setPuttReminder({ holeNumber: hole.holeNumber });
+      }
+    }
+  }, [gpsPos, activeRound, hole, roundScores]);
+
+  const savePutts = async () => {
+    if (!puttReminder || !activeRound || !roundScores) return;
+    const next = roundScores.map((s: any) => (s.hole === puttReminder.holeNumber ? { ...s, putts: puttDraft } : s));
+    setRoundScores(next);
+    setPuttReminder(null);
+    try {
+      await api.put(`/rounds/${activeRound.id}`, { scores: next });
+      toast.success(`Logged ${puttDraft} putt${puttDraft === 1 ? "" : "s"} on Hole ${puttReminder.holeNumber}`);
+    } catch {
+      toast.error("Could not save putts (offline?)");
+    }
+  };
+
+  // Voice Caddie — speaks the live shot summary aloud (hands-free).
+  const voiceAnswer = () => {
+    const u = unit === "yd" ? "yards" : "meters";
+    if (distM == null) return "No target set. Tap the map to place a target.";
+    const plays =
+      pl && !settings.tournamentMode && Math.round(pl.playsLikeMeters) !== Math.round(distM)
+        ? `, playing approximately ${fmtDist(pl.playsLikeMeters, unit)}`
+        : "";
+    const clubTxt = rec && !settings.tournamentMode ? ` Recommended club, ${rec.club.name}.` : "";
+    return `${fmtDist(distM, unit)} ${u} to the ${targetLabel.toLowerCase()}${plays}.${clubTxt}`;
+  };
+
+  const speakCaddie = () => {
+    if (speaking) {
+      Speech.stop();
+      setSpeaking(false);
+      return;
+    }
+    const text = voiceAnswer();
+    toast.info("Voice Caddie", text);
+    setSpeaking(true);
+    Speech.speak(text, { rate: 1, onDone: () => setSpeaking(false), onStopped: () => setSpeaking(false), onError: () => setSpeaking(false) });
+  };
+
+  useEffect(() => () => { Speech.stop(); }, []);
 
   const onMapPress = useCallback(
     (p: LatLng) => {
@@ -400,6 +469,33 @@ export default function Rangefinder() {
         </View>
       )}
 
+      {/* Putt reminder */}
+      {puttReminder && (
+        <View style={styles.puttBanner} testID="putt-reminder-banner">
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 12 }}>
+            <Ionicons name="golf" size={18} color={colors.green} />
+            <Text style={styles.puttTitle}>Log your putts · Hole {puttReminder.holeNumber}</Text>
+          </View>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+            <View style={styles.puttStepper}>
+              <Pressable testID="putt-minus" onPress={() => setPuttDraft(Math.max(0, puttDraft - 1))} style={styles.puttStepBtn}>
+                <Ionicons name="remove" size={18} color="#fff" />
+              </Pressable>
+              <Text style={[styles.puttNum, { fontFamily: font.num }]} testID="putt-draft-value">{puttDraft}</Text>
+              <Pressable testID="putt-plus" onPress={() => setPuttDraft(puttDraft + 1)} style={styles.puttStepBtn}>
+                <Ionicons name="add" size={18} color="#fff" />
+              </Pressable>
+            </View>
+            <Pressable testID="putt-save-btn" onPress={savePutts} style={styles.puttSave}>
+              <Text style={styles.puttSaveTxt}>SAVE</Text>
+            </Pressable>
+            <Pressable testID="putt-dismiss-btn" onPress={() => { puttDismissedRef.current.add(puttReminder.holeNumber); setPuttReminder(null); }} style={styles.puttDismiss}>
+              <Text style={styles.puttDismissTxt}>Later</Text>
+            </Pressable>
+          </View>
+        </View>
+      )}
+
       {/* Distance card */}
       <View style={[styles.distCard, { top: insets.top + 60 }]} testID="distance-card">
         <Text style={styles.distLabel}>{targetLabel} · ACTUAL</Text>
@@ -419,6 +515,16 @@ export default function Rangefinder() {
             {elev.diff >= 0 ? "+" : ""}{elev.diff} m {elev.diff >= 0 ? "UPHILL" : "DOWNHILL"}
           </Text>
         )}
+        {autoWx && wx?.available && ball && target && !settings.tournamentMode && (
+          <View style={styles.wxRow} testID="card-weather">
+            <View style={{ transform: [{ rotate: `${((wx.windFromDeg + 180) - bearingDeg(ball, target) + 360) % 360}deg` }] }}>
+              <Ionicons name="arrow-up" size={13} color={colors.water} />
+            </View>
+            <Text style={styles.wxTxt2}>
+              {Math.round(settings.windUnit === "mph" ? wx.windSpeedKmh / 1.609 : wx.windSpeedKmh)} {settings.windUnit === "kmh" ? "km/h" : "mph"} · {Math.round(wx.tempC)}°C
+            </Text>
+          </View>
+        )}
         {walkDistM != null && (
           <View style={styles.walk} testID="walkoff-meter">
             <Ionicons name="walk" size={14} color={colors.green} />
@@ -437,6 +543,9 @@ export default function Rangefinder() {
         </Pressable>
         <Pressable testID="cam-mode-btn" onPress={cycleCam} style={[styles.iconBtn, camMode !== "free" && { backgroundColor: colors.water }]}>
           <Ionicons name={camMode === "heading" ? "navigate" : "compass"} size={20} color={camMode !== "free" ? "#fff" : colors.charcoal} />
+        </Pressable>
+        <Pressable testID="voice-caddie-btn" onPress={speakCaddie} style={[styles.iconBtn, speaking && { backgroundColor: colors.gold }]}>
+          <Ionicons name={speaking ? "stop" : "volume-high"} size={20} color={speaking ? colors.charcoal : colors.green} />
         </Pressable>
       </View>
 
@@ -667,6 +776,8 @@ const styles = StyleSheet.create({
   plLabel: { fontSize: 9, letterSpacing: 1.5, fontWeight: "800", color: colors.zinc400 },
   plVal: { fontSize: 24, lineHeight: 26, color: colors.green },
   elevTxt: { fontSize: 10, fontWeight: "800", color: colors.zinc500, marginTop: 4 },
+  wxRow: { flexDirection: "row", alignItems: "center", gap: 5, marginTop: 4 },
+  wxTxt2: { fontSize: 11, fontWeight: "800", color: colors.water },
   walk: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 6, paddingTop: 6, borderTopWidth: 1, borderTopColor: colors.zinc200 },
   walkTxt: { fontSize: 10, fontWeight: "900", color: colors.zinc600 },
   walkNum: { fontSize: 14, color: colors.green },
@@ -674,6 +785,15 @@ const styles = StyleSheet.create({
   gpsErrCard: { position: "absolute", top: "33%", left: 24, right: 24, backgroundColor: "#fff", borderRadius: 18, padding: 20, zIndex: 30, shadowColor: "#000", shadowOpacity: 0.25, shadowRadius: 10, elevation: 8 },
   gpsErrTitle: { fontWeight: "800", fontSize: 14, color: colors.charcoal, textAlign: "center" },
   gpsErrBtn: { flex: 1, height: 48, borderRadius: 14, alignItems: "center", justifyContent: "center" },
+  puttBanner: { position: "absolute", top: "40%", left: 24, right: 24, backgroundColor: "#fff", borderRadius: 20, padding: 18, zIndex: 35, shadowColor: "#000", shadowOpacity: 0.25, shadowRadius: 12, elevation: 9 },
+  puttTitle: { fontWeight: "800", fontSize: 15, color: colors.charcoal },
+  puttStepper: { flexDirection: "row", alignItems: "center", gap: 10 },
+  puttStepBtn: { height: 40, width: 40, borderRadius: 12, backgroundColor: colors.green, alignItems: "center", justifyContent: "center" },
+  puttNum: { fontSize: 26, width: 34, textAlign: "center", color: colors.charcoal },
+  puttSave: { flex: 1, height: 44, borderRadius: 12, backgroundColor: colors.green, alignItems: "center", justifyContent: "center" },
+  puttSaveTxt: { color: "#fff", fontWeight: "900", letterSpacing: 1 },
+  puttDismiss: { height: 44, paddingHorizontal: 8, alignItems: "center", justifyContent: "center" },
+  puttDismissTxt: { color: colors.zinc400, fontWeight: "700", fontSize: 12 },
   hint: { position: "absolute", alignSelf: "center", backgroundColor: colors.charcoal, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 999, zIndex: 30 },
   hintTxt: { color: "#fff", fontSize: 12, fontWeight: "800" },
   bottom: { position: "absolute", left: 0, right: 0, bottom: 0, zIndex: 15 },

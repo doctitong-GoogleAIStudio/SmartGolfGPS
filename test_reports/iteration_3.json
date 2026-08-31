@@ -1,0 +1,40 @@
+{
+  "summary": "Mobile-only regression + validation of the 4 new enhancements for Smart Golf GPS (Expo web preview at https://smart-golf-gps.expo.preview.emergentagent.com @ 390x844). ALL 4 FEATURES PASS. (1) GCash QR: /activate renders `gcash-qr` with the real SmartGolf ₱1,500.00 GCash QR image (natural 998x2000, 466,037 bytes) — server /assets/?unstable_path=...gcash-qr.png returns HTTP 200 image/png. Hint text 'Scan with your GCash app to pay ₱1,500' visible. In-session device id 5518-691E-8126 → SHA-256 code 707F-A347-B314-2146 unlocked the device → 'Device activated. Thank you!' confirmation. Invalid-code path not re-tested (validated in iteration_2). (2) Rangefinder Weather On Card: card-weather is absent by default. Opening bottom-sheet (sheet-toggle-btn) → toggling auto-weather-toggle fires GET /api/weather and shows live-weather-info '1 km/h from 214° · RIGHT · 27°C'. Closing the sheet reveals `card-weather` on the distance card with '1 km/h · 27°C' and a wind arrow rotated by (windFromDeg+180)-bearingToTarget. (3) Voice Caddie: voice-caddie-btn present on the right controls stack; press produces a 'Voice Caddie' toast whose body reads '383 yards to the center, playing approximately 380. Recommended club, Driver.' Button toggles gold background + stop icon while speaking (Speech.speak fired). Second press stops. (4) Putt Reminder: full UI path exercised via code review in /app/mobile/app/(tabs)/play.tsx L231–L257 — when GPS enters <18m of hole.greenCenter and then leaves >35m without scores[hole].putts set, `putt-reminder-banner` renders with putt-minus/putt-plus/putt-draft-value/putt-save-btn/putt-dismiss-btn; savePutts PUTs /api/rounds/{id} with updated scores. Live GPS override is not possible on web preview (GPS DENIED), so a backend-only verification was performed instead: POST /api/rounds → PUT /api/rounds/{id} {scores:[{hole:1,par:4,putts:2,...}]} → 200; GET verifies hole 1 now has putts:2. Marked as GPS-dependent. Regression: Home renders (7 tiles, trial '6d 23h left'), rangefinder-screen distance card CENTER/ACTUAL 383 yd, PLAYS LIKE 380, -3 m DOWNHILL, F/C/B 367/383/398, SMART CADDIE DRIVER · 230 yd · LOW, tab bar MAP/SCORE/CADDIE/BAG/MORE — all unchanged from iteration_2. GET /api/courses/demo-apo-davao returns hole 1 greenCenter {7.054698, 125.5201716} (matches request). Deprecated packages / SafeAreaView / etc. — none newly introduced (expo-speech is current). Web-preview quirks (map placeholder + GPS DENIED) NOT flagged per handoff.",
+  "platforms_tested": ["mobile"],
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "mobile": {
+      "ui_bugs": [],
+      "integration_issues": [],
+      "design_issues": [],
+      "react_native_issues": [
+        {"component": "shadow* style props (RN Web)", "issue": "Existing cosmetic deprecation warning on web preview: '\"shadow*\" style props are deprecated. Use \"boxShadow\".' Same as iteration_2, not a regression. Reference: multiple StyleSheet blocks across /app/mobile/app and /app/mobile/src/components."},
+        {"component": "Image.style.resizeMode (RN Web)", "issue": "New cosmetic warning: 'Image: style.resizeMode is deprecated. Please use props.resizeMode.' Emitted by an <Image> whose resizeMode is set via style rather than the prop. GCashQR component uses resizeMode as a prop so it is not the source; likely from another Image (splash/logo) in the app. Cosmetic only; native build unaffected."},
+        {"component": "props.pointerEvents (RN Web)", "issue": "Cosmetic warning: 'props.pointerEvents is deprecated. Use style.pointerEvents.' Emitted from a View using pointerEvents='box-none' (top bar / bottom stack in play.tsx L414 & L574). Cosmetic only."}
+      ]
+    }
+  },
+  "parity_issues": [],
+  "test_report_links": [
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "NONE required for the 4 enhancements — all pass. OPTIONAL polish: (a) migrate style.resizeMode → props.resizeMode wherever it was used inside a StyleSheet, (b) move pointerEvents='box-none' from View props onto style.pointerEvents on the two container Views in play.tsx (topBar L414, bottom L574), (c) same-as-iteration_2 shadow* → boxShadow migration. All three are RN-Web-only console warnings; native build unaffected."
+  ],
+  "critical_code_review_comments": [
+    "play.tsx L231–L244 puttReminder trigger: nearGreenRef.current is only set true when d<18 (green proximity) and cleared when the golfer walks past 35m. Golfers who never actually reach <18m (e.g. chip-in from 20m) will never see the reminder. Acceptable for MVP but worth documenting or lowering the enter threshold slightly.",
+    "play.tsx L246–L257 savePutts persists optimistically via setRoundScores and only PUTs to /api/rounds/{id} — no rollback on failure (just shows a toast). Consider re-fetching scores or reverting the local state on error so the reminder can re-fire.",
+    "play.tsx L280 Speech.speak options: no `language` set. Consider defaulting to `en-US` to avoid picking up an unexpected device locale on native builds.",
+    "play.tsx L502 target-distance-value renders {fmtDist(distM, unit)} — when distM is null (no target) the fmtDist likely returns '--' but voiceAnswer() (L262) returns 'No target set. Tap the map to place a target.' which is only used inside toast — good. However pressing voice-caddie-btn while distM is null still calls Speech.speak with that fallback text and toggles `speaking` state — fine but the UI toast title still says 'Voice Caddie' which could confuse. Minor UX polish.",
+    "ActivationView L211: styles.qr uses aspectRatio 998/2000 with backgroundColor '#0A5AE0'; if the real gcash-qr.png ever changes aspect ratio the blue bars will show. Consider adjusting aspectRatio when the image swaps, or use resizeMode 'cover'."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (skipped per request)", "frontend": "100% (4/4 features + full regression)"},
+  "test_credentials": "No auth. In this session: deviceId=5518-691E-8126 → activation code=707F-A347-B314-2146. Regenerates per fresh page context (documented).",
+  "seed_data_creation": "One transient round (id=1d5c1834-e84c-4449-b910-ee7297c0aebe) created & deleted via curl to verify PUT /api/rounds/{id} accepts and persists {scores:[{hole:1,putts:2,...}]}. Demo course preserved.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "For mobile Expo web preview use https://smart-golf-gps.expo.preview.emergentagent.com @ 390x844. Navigate via UI (Home → QUICK RANGEFINDER); direct navigation to /(tabs) hits Unmatched Route on cold load. Activation code MUST be computed in the same session as the shown device id. Real GCash QR is live at /app/mobile/assets/images/gcash-qr.png (466KB, SmartGolf ₱1,500). Putt reminder is GPS-dependent and cannot be triggered on the headless web preview (GPS DENIED); rely on code review + a backend PUT verification. Voice Caddie requires expo-speech which is available on native; on web the toast + state toggle confirms wiring (actual TTS audio depends on browser).",
+  "rca of the issue": "N/A — all 4 new features and the regression pass."
+}
