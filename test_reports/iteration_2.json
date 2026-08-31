@@ -1,0 +1,38 @@
+{
+  "summary": "Mobile (Expo web preview) e2e + shared-backend regression complete for Smart Golf GPS & AI Caddie. Backend: 13/13 pytest passed (courses CRUD, seeded demo, bag, settings, rounds lifecycle, shots+Haversine, club-stats, stats, elevation, caddie SSE via EMERGENT_LLM_KEY); ad-hoc verified GET /api/weather=200 and POST /api/rounds/{id}/track=200. Mobile UI at https://smart-golf-gps.expo.preview.emergentagent.com (390x844): Home renders with hero, trial card '7d 0h left', and all 7 menu buttons (start-round, quick-rangefinder, courses, bag, history, stats, settings). Activation flow FULL PASS: /activate shows trial-countdown, device-id-box (6362-443B-DACB in this session), gcash-qr placeholder, gcash-ref-input, email-device-btn, activation-code-input, activate-btn; invalid code 'ABCD-EFGH-1234-5678' produced red 'Invalid activation code for this device' toast; SHA-256 code 9BAA-5CD3-697D-A213 computed in-session unlocked device -> Home flips to 'Device activated - Full access'. /play shows hole nav (HOLE 1 PAR 4 HCP 7), F/C/B strip 367/383/398 yd, CENTER-ACTUAL 383 yd, PLAYS-LIKE 379 (-3m DOWNHILL from elevation API), SMART CADDIE 'DRIVER 230 yd LOW', SET BALL ON MAP, GPS, TRACK SHOT, tab bar MAP/SCORE/CADDIE/BAG/MORE. Start Round creates round via POST /api/rounds and navigates to /play with round context. Score tab renders steppers (SCORE/PUTTS/PENALTY), FW/GIR toggles, TOTAL/TO PAR/FRONT 9/BACK 9, full 18-hole table with pars. Caddie tab: ELEVATION/ACTUAL/PLAYS-LIKE/F/C/B cards + DRIVER recommendation + ASK AI CADDIE fires POST /api/caddie and streams back a full advice paragraph (~547 chars). Bag lists 16 clubs (Driver..3W..3H..PW..SW..Putter) with 32 carry/total inputs; editing a value fires debounced PUT /api/bag. Courses lists demo Apo Highlands + user-created Southpacific with Rangefinder/Edit/New Course. History lists completed rounds. Stats shows ROUNDS PLAYED/AVG SCORE/BEST SCORE/AVG PUTTS/FAIRWAY/GIR/AVG DRIVER/SHOTS TRACKED + RECENT ROUNDS chart. Settings shows Units yd/m, Wind km/h/mph, GPS Tracking, Plays-like Elevation, Tournament, AI, and DEVICE section with 'TRIAL 001B-D2F4-13A7 - ACTIVATE'. Web-preview quirks per handoff (map placeholder + GPS DENIED) confirmed and NOT flagged. Zero page errors, no red screens.",
+  "platforms_tested": ["mobile"],
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "mobile": {
+      "ui_bugs": [],
+      "integration_issues": [],
+      "design_issues": [],
+      "react_native_issues": [
+        {"component": "shadow* style props (RN Web)", "issue": "Console deprecation warning: '\"shadow*\" style props are deprecated. Use \"boxShadow\".' Emitted on Home + other screens. Cosmetic on web preview only; native RN uses the shadow props natively. Reference: multiple StyleSheet usages across /app/mobile/app and /app/mobile/src/components."}
+      ]
+    }
+  },
+  "parity_issues": [],
+  "test_report_links": [
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "OPTIONAL: migrate React Native shadowColor/shadowOffset/shadowOpacity/shadowRadius styles to the new boxShadow shorthand to silence RN-Web deprecation warnings (does not affect native build)."
+  ],
+  "critical_code_review_comments": [
+    "LicenseContext trial countdown interval runs every 1s even when the Activation screen is not mounted - benign but could be paused when app is backgrounded or when not on /activate to save cycles.",
+    "ActivationView reads deviceId from useLicense and computes activationCode via SHA-256 in-app; algorithm identical to activation-generator.html - verified end-to-end. Consider adding a rate limit / lockout after N invalid attempts to slow brute-force on a stolen phone.",
+    "getDeviceId() on web falls back to Crypto.randomUUID() and persists via storage.secureSet; on the web preview the storage is per-tab so device id regenerates every fresh session - this is fine (documented) but confirm SecureStore is truly used on native so device id is stable across app reinstalls (currently only across cold starts).",
+    "PUT /api/bag fires twice on a single field edit in the observed session (likely React 18 StrictMode or focus/blur double-trigger). Idempotent so harmless, but worth debouncing on the mobile client too.",
+    "api.ts throws bare `Error` with method+path+status - consider surfacing server error body (JSON detail) to make toast messages more actionable."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "No auth. Activation SECRET + algorithm in /app/memory/test_credentials.md. Session device id 6362-443B-DACB -> valid code 9BAA-5CD3-697D-A213 (regenerates every page context).",
+  "seed_data_creation": "Test round created + deleted during backend pytest. Bag Driver.carry edited to 225 then restored to 230 during mobile UI test. Demo course 'demo-apo-davao' preserved.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "For mobile Expo web preview screenshots use https://smart-golf-gps.expo.preview.emergentagent.com with viewport 390x844. Device ID + activation code MUST be computed in the SAME page context - do not reload. WebCrypto snippet in /app/memory/test_credentials.md works. Map area shows a 'Live map renders on the mobile app' placeholder and GPS shows 'GPS DENIED' - these are expected on web preview, do NOT flag. Deep-linking to /play or (tabs) routes on a cold load can render blank; always navigate via Home. Backend regression: `pytest /app/backend/tests/backend_test.py -v` (13 tests, ~9s).",
+  "rca of the issue": "N/A - no bugs found. All 14 requested feature areas pass."
+}

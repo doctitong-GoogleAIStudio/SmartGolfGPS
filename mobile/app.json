@@ -10,7 +10,12 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.emergent.smartgolfgps.ix61xw"
+      "bundleIdentifier": "com.emergent.smartgolfgps.ix61xw",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Smart Golf GPS uses your location to measure live distances to the green and track your shots on the course.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Allow background location so the app keeps tracking your walk and shots while your phone is in your pocket during a round.",
+        "UIBackgroundModes": ["location"]
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -18,7 +23,14 @@
         "backgroundColor": "#000000"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.emergent.smartgolfgps.ix61xw"
+      "package": "com.emergent.smartgolfgps.ix61xw",
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION",
+        "FOREGROUND_SERVICE",
+        "FOREGROUND_SERVICE_LOCATION"
+      ]
     },
     "web": {
       "bundler": "metro",
@@ -28,6 +40,15 @@
     "plugins": [
       "expo-router",
       [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Allow Smart Golf GPS to use your location to measure distances and track your round, even in the background while walking.",
+          "locationWhenInUsePermission": "Smart Golf GPS uses your location to measure live distances to the green and track your shots.",
+          "isAndroidBackgroundLocationEnabled": true,
+          "isAndroidForegroundServiceEnabled": true
+        }
+      ],
+      [
         "expo-splash-screen",
         {
           "image": "./assets/images/splash-image.png",
@@ -35,7 +56,8 @@
           "resizeMode": "contain",
           "backgroundColor": "#000000"
         }
-      ]
+      ],
+      "expo-mail-composer"
     ],
     "experiments": {
       "typedRoutes": true

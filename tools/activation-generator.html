@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Smart Golf GPS — Activation Generator</title>
+<style>
+  :root { --green:#14532D; --gold:#D4AF37; --char:#0F0F10; }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background:#0F0F10; color:#fff; min-height:100vh; display:flex; align-items:center; justify-content:center; padding:24px; }
+  .card { width:100%; max-width:460px; background:#17181a; border:1px solid rgba(255,255,255,0.08); border-radius:24px; padding:28px; }
+  .badge { color:var(--gold); font-weight:800; letter-spacing:2px; font-size:12px; }
+  h1 { font-size:26px; margin:8px 0 4px; }
+  p.sub { color:rgba(255,255,255,0.6); font-size:14px; margin:0 0 20px; line-height:1.4; }
+  label { display:block; font-size:11px; letter-spacing:1.5px; font-weight:800; color:rgba(255,255,255,0.5); margin:18px 0 8px; }
+  input { width:100%; height:54px; border-radius:14px; border:none; padding:0 16px; font-size:18px; font-weight:700; letter-spacing:2px; text-transform:uppercase; }
+  button { width:100%; height:56px; margin-top:20px; border:none; border-radius:16px; background:var(--gold); color:var(--char); font-weight:900; letter-spacing:1.5px; font-size:15px; cursor:pointer; }
+  button:active { transform:scale(0.99); }
+  .result { margin-top:22px; background:var(--green); border-radius:16px; padding:18px; text-align:center; display:none; }
+  .result.show { display:block; }
+  .result .code { font-size:30px; font-weight:900; letter-spacing:4px; margin:6px 0; }
+  .result .hint { font-size:12px; color:rgba(255,255,255,0.7); }
+  .copy { margin-top:10px; background:rgba(255,255,255,0.15); color:#fff; height:40px; border-radius:10px; font-size:12px; }
+  .note { margin-top:20px; font-size:11px; color:rgba(255,255,255,0.4); line-height:1.5; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <div class="badge">SMART GOLF GPS · ADMIN</div>
+    <h1>Activation Generator</h1>
+    <p class="sub">Paste the customer's <strong>Device ID</strong> (from their email) to generate their unique activation code. Works fully offline.</p>
+
+    <label>DEVICE ID</label>
+    <input id="deviceId" placeholder="XXXX-XXXX-XXXX" autocomplete="off" />
+
+    <button onclick="generate()">GENERATE ACTIVATION CODE</button>
+
+    <div class="result" id="result">
+      <div class="hint">ACTIVATION CODE</div>
+      <div class="code" id="code">----</div>
+      <button class="copy" onclick="copyCode()">Copy code</button>
+    </div>
+
+    <p class="note">Send this code back to the customer. It only unlocks the device with the matching Device ID. Keep this file private — it contains the signing secret.</p>
+  </div>
+
+<script>
+  // MUST match ACTIVATION_SECRET in /app/mobile/src/lib/license.ts exactly.
+  const ACTIVATION_SECRET = "SG-GPS-2026::a7Fq9zLpW3xR6mB2::VINCENT-CADDIE";
+
+  function normalize(s) { return (s || "").replace(/[^a-zA-Z0-9]/g, "").toUpperCase(); }
+
+  async function sha256hex(str) {
+    const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(str));
+    return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join("");
+  }
+
+  async function activationCodeFor(deviceId) {
+    const hex = await sha256hex(`${normalize(deviceId)}|${ACTIVATION_SECRET}`);
+    const c = hex.slice(0, 16).toUpperCase();
+    return `${c.slice(0,4)}-${c.slice(4,8)}-${c.slice(8,12)}-${c.slice(12,16)}`;
+  }
+
+  async function generate() {
+    const id = document.getElementById("deviceId").value.trim();
+    if (!id) { alert("Enter a Device ID"); return; }
+    const code = await activationCodeFor(id);
+    document.getElementById("code").textContent = code;
+    document.getElementById("result").classList.add("show");
+  }
+
+  function copyCode() {
+    const code = document.getElementById("code").textContent;
+    navigator.clipboard.writeText(code).then(() => alert("Copied: " + code));
+  }
+</script>
+</body>
+</html>

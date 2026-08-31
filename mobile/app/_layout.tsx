@@ -1,33 +1,68 @@
+import "react-native-gesture-handler";
+import "@/src/lib/locationTask"; // registers background location task (module side-effect)
+
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect } from "react";
-import { LogBox } from "react-native";
+import { LogBox, View } from "react-native";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { SafeAreaProvider } from "react-native-safe-area-context";
+import { StatusBar } from "expo-status-bar";
+import { useFonts } from "expo-font";
 
 import { useIconFonts } from "@/src/hooks/use-icon-fonts";
+import { SettingsProvider } from "@/src/context/SettingsContext";
+import { LicenseProvider, useLicense } from "@/src/context/LicenseContext";
+import { ToastHost } from "@/src/components/ToastHost";
+import { ActivationView } from "@/src/components/ActivationView";
 
-
-// Disable logbox errors etc so that users can see the app
-// and agent works as expected.
-LogBox.ignoreAllLogs(true)
-
-// Keep the native splash visible from cold start until icon fonts register.
-// Required because @expo/vector-icons' componentDidMount fallback fires
-// Font.loadAsync against a broken vendor path if any <Icon> mounts before
-// the family is registered — which throws on Android Expo Go.
+LogBox.ignoreAllLogs(true);
 SplashScreen.preventAutoHideAsync();
 
+// Full-screen gate shown ONLY when the trial is over and the device isn't activated.
+function LicenseGate() {
+  const { ready, locked } = useLicense();
+  if (!ready || !locked) return null;
+  return (
+    <View style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, zIndex: 5000 }}>
+      <ActivationView />
+    </View>
+  );
+}
+
 export default function RootLayout() {
-  const [loaded, error] = useIconFonts();
+  const [iconsLoaded, iconErr] = useIconFonts();
+  // Load brand fonts in the background — do NOT block boot on them (remote
+  // fetch can stall on web and leave the app on a null render).
+  useFonts({
+    Anton: "https://cdn.jsdelivr.net/fontsource/fonts/anton@latest/latin-400-normal.ttf",
+    Manrope: "https://cdn.jsdelivr.net/fontsource/fonts/manrope@latest/latin-800-normal.ttf",
+  });
+
+  const ready = iconsLoaded || iconErr;
 
   useEffect(() => {
-    if (loaded || error) {
-      SplashScreen.hideAsync();
-    }
-  }, [loaded, error]);
+    if (ready) SplashScreen.hideAsync();
+  }, [ready]);
 
-  // If the CDN is unreachable we fall through on error rather than wedging
-  // the app — icons will tofu, but the app still boots.
-  if (!loaded && !error) return null;
+  if (!ready) return null;
 
-  return <Stack screenOptions={{ headerShown: false }} />;
+  return (
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SafeAreaProvider>
+        <SettingsProvider>
+          <LicenseProvider>
+            <StatusBar style="dark" />
+            <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: "#FDFDFD" } }}>
+              <Stack.Screen name="index" />
+              <Stack.Screen name="(tabs)" />
+              <Stack.Screen name="activate" options={{ presentation: "modal" }} />
+            </Stack>
+            <LicenseGate />
+            <ToastHost />
+          </LicenseProvider>
+        </SettingsProvider>
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
+  );
 }
