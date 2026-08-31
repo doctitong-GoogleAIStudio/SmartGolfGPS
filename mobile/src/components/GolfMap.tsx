@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { View, Text, StyleSheet, Platform } from "react-native";
 import MapView, { Marker, Polyline, UrlTile, Region } from "react-native-maps";
 import { colors, font } from "@/src/theme";
-import { LatLng } from "@/src/lib/geo";
+import { LatLng, bearingDeg } from "@/src/lib/geo";
 
 const ESRI_SAT =
   "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
@@ -39,6 +39,8 @@ type Props = {
   followPos?: LatLng | null;
   gpsPath?: { lat: number; lng: number }[];
   shotLines?: ShotLine[];
+  flyover?: { from: LatLng; to: LatLng } | null;
+  flyoverKey?: number;
   style?: any;
 };
 
@@ -73,6 +75,8 @@ export function GolfMap({
   followPos,
   gpsPath = [],
   shotLines = [],
+  flyover = null,
+  flyoverKey = 0,
   style,
 }: Props) {
   const mapRef = useRef<MapView>(null);
@@ -112,6 +116,19 @@ export function GolfMap({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [followPos?.lat, followPos?.lng]);
+
+  // Hole flyover: on arrival at a new hole, sweep the camera tee -> green.
+  useEffect(() => {
+    if (!flyoverKey || !flyover || !mapRef.current) return;
+    const m = mapRef.current;
+    const heading = bearingDeg(flyover.from, flyover.to);
+    m.animateCamera({ center: { latitude: flyover.from.lat, longitude: flyover.from.lng }, heading, pitch: 0 }, { duration: 500 });
+    const t = setTimeout(() => {
+      m.animateCamera({ center: { latitude: flyover.to.lat, longitude: flyover.to.lng }, heading }, { duration: 2400 });
+    }, 650);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [flyoverKey]);
 
   const nativeType = androidTiles ? "none" : mapType === "map" ? "standard" : mapType === "hybrid" ? "hybrid" : "satellite";
 

@@ -95,6 +95,7 @@ class Course(BaseModel):
     isDemo: bool = False
     holes: List[Hole] = []
     createdAt: str = Field(default_factory=now_iso)
+    shareCode: Optional[str] = None
 
 
 class Club(BaseModel):
@@ -200,6 +201,9 @@ async def get_course(course_id: str):
 @api.put("/courses/{course_id}")
 async def update_course(course_id: str, course: Course):
     course.id = course_id
+    existing = await db.courses.find_one({"id": course_id}, {"_id": 0})
+    if existing and not course.shareCode:
+        course.shareCode = existing.get("shareCode")  # never lose an issued code on edit
     res = await db.courses.replace_one({"id": course_id}, course.model_dump())
     if res.matched_count == 0:
         raise HTTPException(404, "Course not found")
@@ -210,6 +214,51 @@ async def update_course(course_id: str, course: Course):
 async def delete_course(course_id: str):
     await db.courses.delete_one({"id": course_id})
     return {"ok": True}
+
+
+def _new_share_code():
+    # Unambiguous chars (no O/0/I/1).
+    import random
+    alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+    return "".join(random.choice(alphabet) for _ in range(6))
+
+
+@api.post("/courses/{course_id}/share")
+async def share_course(course_id: str):
+    c = await db.courses.find_one({"id": course_id}, {"_id": 0})
+    if not c:
+        raise HTTPException(404, "Course not found")
+    code = c.get("shareCode")
+    if not code:
+        # ensure uniqueness
+        for _ in range(10):
+            code = _new_share_code()
+            if not await db.courses.find_one({"shareCode": code}):
+                break
+        await db.courses.update_one({"id": course_id}, {"$set": {"shareCode": code}})
+    return {"shareCode": code}
+
+
+@api.post("/courses/import")
+async def import_course(body: dict):
+    code = (body.get("code") or "").strip().upper()
+    if not code:
+        raise HTTPException(400, "Share code required")
+    src = await db.courses.find_one({"shareCode": code}, {"_id": 0})
+    if not src:
+        raise HTTPException(404, "No course found for that code")
+    clone = dict(src)
+    clone["id"] = uid()
+    clone["name"] = f"{src.get('name', 'Course')} (Shared)"
+    clone["isDemo"] = False
+    clone["shareCode"] = None
+    clone["createdAt"] = now_iso()
+    for h in clone.get("holes", []):
+        for hz in h.get("hazards", []):
+            hz["id"] = uid()
+    await db.courses.insert_one(clone)
+    clone.pop("_id", None)
+    return clone
 
 
 # ---------- Bag ----------

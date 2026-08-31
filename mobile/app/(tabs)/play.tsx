@@ -59,6 +59,7 @@ export default function Rangefinder() {
   const [roundScores, setRoundScores] = useState<any[] | null>(null);
   const [puttReminder, setPuttReminder] = useState<{ holeNumber: number } | null>(null);
   const [puttDraft, setPuttDraft] = useState(2);
+  const [flyoverKey, setFlyoverKey] = useState(0);
 
   const nearGreenRef = useRef(false);
   const puttDismissedRef = useRef<Set<number>>(new Set());
@@ -86,6 +87,9 @@ export default function Rangefinder() {
         cachedGet("/bag", "bag").then((b) => alive && setBag(b)).catch(() => {});
         const a = await getActiveRound();
         if (alive) setActive(a);
+        if (a) {
+          api.get(`/rounds/${a.id}`).then((r) => alive && setRoundScores(r.scores)).catch(() => {});
+        }
         const quick = await storage.getItem<string>("sg_quick_course", "");
         const cid = a?.courseId || quick;
         try {
@@ -110,9 +114,10 @@ export default function Rangefinder() {
     if (!ball && !gpsPos && hole?.tee) { setBall(hole.tee); setBallSource("manual"); }
   }, [hole, ball, gpsPos]);
 
-  // Default target: green center on hole change.
+  // Default target: green center on hole change + trigger the hole flyover.
   useEffect(() => {
     if (hole?.greenCenter) { setTarget(hole.greenCenter); setTargetLabel("CENTER"); }
+    if (hole?.tee && hole?.greenCenter) setFlyoverKey((k) => k + 1);
   }, [holeIdx, course]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Background tracking lifecycle for an active round.
@@ -244,13 +249,16 @@ export default function Rangefinder() {
   }, [gpsPos, activeRound, hole, roundScores]);
 
   const savePutts = async () => {
-    if (!puttReminder || !activeRound || !roundScores) return;
-    const next = roundScores.map((s: any) => (s.hole === puttReminder.holeNumber ? { ...s, putts: puttDraft } : s));
-    setRoundScores(next);
+    if (!puttReminder || !activeRound) return;
+    const hn = puttReminder.holeNumber;
     setPuttReminder(null);
     try {
+      // Re-read the latest scores so we never clobber a score set on the Score tab.
+      const fresh = await api.get(`/rounds/${activeRound.id}`);
+      const next = fresh.scores.map((s: any) => (s.hole === hn ? { ...s, putts: puttDraft } : s));
       await api.put(`/rounds/${activeRound.id}`, { scores: next });
-      toast.success(`Logged ${puttDraft} putt${puttDraft === 1 ? "" : "s"} on Hole ${puttReminder.holeNumber}`);
+      setRoundScores(next);
+      toast.success(`Logged ${puttDraft} putt${puttDraft === 1 ? "" : "s"} on Hole ${hn}`);
     } catch {
       toast.error("Could not save putts (offline?)");
     }
@@ -299,6 +307,14 @@ export default function Rangefinder() {
   );
 
   const goHole = (next: number) => {
+    const leaving = hole;
+    if (activeRound && roundScores && leaving && next !== holeIdx) {
+      const sc = roundScores.find((s: any) => s.hole === leaving.holeNumber);
+      if (sc && sc.score != null && sc.putts == null && !puttDismissedRef.current.has(leaving.holeNumber)) {
+        setPuttDraft(2);
+        setPuttReminder({ holeNumber: leaving.holeNumber });
+      }
+    }
     setHoleIdx(next);
     setHoleSuggestion(null);
     if (activeRound) {
@@ -408,6 +424,8 @@ export default function Rangefinder() {
         followPos={camMode !== "free" ? gpsPos : null}
         onUserPan={() => setCamMode("free")}
         gpsPath={activeRound ? gpsPath : []}
+        flyover={hole?.tee && hole?.greenCenter ? { from: hole.tee, to: hole.greenCenter } : null}
+        flyoverKey={flyoverKey}
       />
 
       {/* Top bar */}

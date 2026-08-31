@@ -58,6 +58,12 @@ iteration_1: backend 13/13 pass, web frontend 100%.
 iteration_2 (mobile): 100% pass — all 12 mobile flows + backend regression (13/13). Activation verified end-to-end. Report: /app/test_reports/iteration_2.json.
 iteration_3 (mobile enhancements): 4/4 PASS (GCash QR, Weather On Card, Voice Caddie, Putt Reminder). Report: /app/test_reports/iteration_3.json.
 
+### Mobile enhancements v2 (2026-06, iteration_4)
+- Course Sharing: POST /api/courses/{id}/share (idempotent 6-char code) + POST /api/courses/import (clones course incl. 18 holes, new ids, name +" (Shared)"). PUT /courses preserves shareCode on edit. Mobile Courses UI: IMPORT button + per-card SHARE (copies to clipboard). Backend 12/12 (/app/backend/tests/test_share_import.py).
+- Hole Flyover: GolfMap camera sweeps tee->green on hole change (flyover/flyoverKey; native-only animation).
+- Auto Putt Prompt On Hole Change: tapping next/prev hole with a scored-but-putt-less hole prompts to log putts.
+- Bug fixed: Play.tsx roundScores was stale vs Score tab -> savePutts clobbered scores. Fixed by re-fetching roundScores on MAP focus + re-reading fresh scores before PUT. Verified score+putts both persist.
+
 ## Notes for next agent
 - Frontend GPS testing: grant geolocation + set_geolocation(7.0545, 125.5195) before nav; viewport 390x844
 - Settings singleton id="default"; demo course id "demo-apo-davao" — do not delete
