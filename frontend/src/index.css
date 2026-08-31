@@ -1,0 +1,129 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+    margin: 0;
+    font-family: "Manrope", -apple-system, BlinkMacSystemFont, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    background: #fdfdfd;
+    color: #0f0f10;
+    overscroll-behavior: none;
+}
+
+.font-num {
+    font-family: "Anton", sans-serif;
+    letter-spacing: 0.01em;
+}
+
+.font-head {
+    font-family: "Cabinet Grotesk", "Manrope", sans-serif;
+}
+
+.overline-label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.22em;
+    font-weight: 800;
+}
+
+/* map markers */
+.mk-ball {
+    width: 18px; height: 18px; border-radius: 50%;
+    background: #fff; border: 3px solid #0f0f10;
+    box-shadow: 0 0 0 3px rgba(255,255,255,0.35), 0 2px 6px rgba(0,0,0,0.6);
+}
+.mk-gps {
+    width: 16px; height: 16px; border-radius: 50%;
+    background: #0ea5e9; border: 3px solid #fff;
+    box-shadow: 0 0 0 6px rgba(14,165,233,0.25);
+}
+.mk-flag { filter: drop-shadow(0 2px 3px rgba(0,0,0,0.7)); }
+.mk-tee {
+    width: 22px; height: 22px; border-radius: 4px; background: #0f0f10; color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 800; border: 2px solid #fff;
+}
+.mk-green {
+    width: 20px; height: 20px; border-radius: 50%; background: #14532d; color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10px; font-weight: 800; border: 2px solid #fff;
+}
+.mk-hazard {
+    width: 22px; height: 22px; border-radius: 50%; color: #0f0f10;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 800; border: 2px solid #fff;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.5);
+}
+.mk-distlabel {
+    background: #0f0f10; color: #fff; padding: 3px 8px; border-radius: 999px;
+    font-size: 12px; font-weight: 800; text-align: center; white-space: nowrap;
+    border: 1px solid rgba(255,255,255,0.4);
+}
+
+.leaflet-container { font-family: inherit; }
+
+/* smooth golfer marker movement (navigation style) */
+.gps-marker-anim { transition: transform 0.9s linear; }
+.leaflet-zoom-anim .gps-marker-anim { transition: none; }
+.mk-gps-wrap { position: relative; width: 44px; height: 44px; }
+.mk-gps-wrap .mk-gps { position: absolute; left: 14px; top: 14px; }
+
+/* keep labels upright when map is rotated (Direction Up mode) */
+.mk-distlabel, .mk-green, .mk-tee, .mk-hazard, .mk-ball {
+    transform: rotate(var(--map-rot, 0deg));
+}
+
+@layer base {
+    :root {
+        --background: 0 0% 99%;
+        --foreground: 240 3% 6%;
+        --card: 0 0% 100%;
+        --card-foreground: 240 3% 6%;
+        --popover: 0 0% 100%;
+        --popover-foreground: 240 3% 6%;
+        --primary: 143 61% 20%;
+        --primary-foreground: 0 0% 98%;
+        --secondary: 240 5% 96%;
+        --secondary-foreground: 240 3% 6%;
+        --muted: 240 5% 96%;
+        --muted-foreground: 240 4% 45%;
+        --accent: 45 63% 52%;
+        --accent-foreground: 240 3% 6%;
+        --destructive: 0 84.2% 60.2%;
+        --destructive-foreground: 0 0% 98%;
+        --border: 240 6% 90%;
+        --input: 240 6% 90%;
+        --ring: 143 61% 20%;
+        --chart-1: 143 61% 20%;
+        --chart-2: 142 71% 45%;
+        --chart-3: 45 63% 52%;
+        --chart-4: 199 89% 48%;
+        --chart-5: 0 84% 60%;
+        --radius: 0.75rem;
+    }
+}
+
+@layer base {
+    * {
+        @apply border-border;
+    }
+    body {
+        @apply bg-background text-foreground;
+    }
+}
+
+@layer base {
+    [data-debug-wrapper="true"] {
+        display: contents !important;
+    }
+    [data-debug-wrapper="true"] > * {
+        margin-left: inherit; margin-right: inherit; margin-top: inherit; margin-bottom: inherit;
+        padding-left: inherit; padding-right: inherit; padding-top: inherit; padding-bottom: inherit;
+        column-gap: inherit; row-gap: inherit; gap: inherit;
+        border-left-width: inherit; border-right-width: inherit; border-top-width: inherit; border-bottom-width: inherit;
+        border-left-style: inherit; border-right-style: inherit; border-top-style: inherit; border-bottom-style: inherit;
+        border-left-color: inherit; border-right-color: inherit; border-top-color: inherit; border-bottom-color: inherit;
+    }
+}

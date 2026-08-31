@@ -1,0 +1,10 @@
+.App {
+  min-height: 100vh;
+}
+
+button {
+  transition: background-color 0.15s ease, color 0.15s ease, opacity 0.15s ease;
+}
+button:active {
+  transform: scale(0.97);
+}

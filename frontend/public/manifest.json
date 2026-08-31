@@ -1,0 +1,14 @@
+{
+  "short_name": "Smart Golf GPS",
+  "name": "Smart Golf GPS & AI Caddie",
+  "description": "GPS golf rangefinder, course map, shot tracker, scorecard and AI caddie.",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ],
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "theme_color": "#14532D",
+  "background_color": "#0F0F10"
+}

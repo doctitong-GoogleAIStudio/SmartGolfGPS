@@ -1,0 +1,105 @@
+{
+  "theme_strategy": {
+    "mode": "Light Theme Priority",
+    "rationale": "Outdoor sunlight requires extreme high-contrast. Dark mode creates glare. We use a 'Performance Pro' meets 'Luxury' archetype: Stark white/sandstone base, deep charcoal structure, electric grass green for kinetic triggers, and subtle gold for premium accents."
+  },
+  "colors": {
+    "base": {
+      "background": "#FDFDFD",
+      "surface": "#F4F4F5",
+      "map_overlay": "#FFFFFF"
+    },
+    "brand": {
+      "primary_green": "#14532D",
+      "fairway_green": "#22C55E",
+      "accent_gold": "#D4AF37",
+      "charcoal_text": "#0F0F10"
+    },
+    "feedback": {
+      "hazard_red": "#EF4444",
+      "water_blue": "#0EA5E9"
+    }
+  },
+  "typography": {
+    "fonts": {
+      "numbers": "Anton",
+      "headings": "Cabinet Grotesk",
+      "body": "Manrope"
+    },
+    "hierarchy": {
+      "h1": "text-5xl tracking-tighter uppercase",
+      "h2": "text-3xl tracking-tight",
+      "h3": "text-xl",
+      "body": "text-base tracking-normal",
+      "label": "text-xs uppercase tracking-[0.2em] font-bold"
+    },
+    "rules": [
+      "Never use Inter, Roboto, or generic sans for headings.",
+      "Large distance numbers MUST use Anton for condensed, high-legibility athletic impact.",
+      "Overlines (e.g., 'TARGET', 'PLAYS LIKE') must be text-xs, uppercase, and wide-tracked."
+    ]
+  },
+  "components": {
+    "rangefinder_overlay": {
+      "style": "Floating solid white container, 1px charcoal border, heavy drop-shadow. NOT transparent glassmorphism to avoid satellite map bleed-through in sunlight.",
+      "layout": "Positioned top-left or top-center, completely un-ignorable. Text is massive and high contrast."
+    },
+    "bottom_sheet": {
+      "style": "Rounded top corners (rounded-t-3xl), solid background, thin gold or green top border indicator.",
+      "interaction": "Collapsible via Framer Motion drag gestures. Houses 'Plays-Like', 'Club Rec', and 'Hazards'."
+    },
+    "bottom_navigation": {
+      "style": "Fixed bottom. High contrast icons. Active state gets a subtle gold underline or filled green icon.",
+      "spacing": "pb-safe-area pt-4 px-6 flex justify-between"
+    },
+    "buttons": {
+      "style": "Large, one-hand operable. min-h-[56px] or h-14. Pill-shaped or sharp rectangular. Primary action uses primary_green with white text."
+    },
+    "scorecard": {
+      "style": "Dense grid layout using 'border-collapse'. Alternate row backgrounds for legibility in sun. High contrast table cells."
+    }
+  },
+  "layouts": {
+    "mobile_first": true,
+    "grid_system": "Bento Grid Protocol Mode B (High Density) for statistics and round history. Every pixel utilized.",
+    "spacing": "Generous spacing (p-6, p-8) within cards to prevent accidental taps outdoors."
+  },
+  "motion": {
+    "sheet_transitions": "spring, stiffness 300, damping 30",
+    "button_taps": "scale down to 0.95 on active",
+    "rules": [
+      "Respect prefers-reduced-motion",
+      "Avoid long sweeping animations. Keep interactions snappy for outdoor utility."
+    ]
+  },
+  "accessibility": {
+    "contrast": "APCA standard minimum. Text on map MUST have solid background behind it.",
+    "touch_targets": "Minimum 48x48px for all interactive elements.",
+    "testing": "All interactive elements MUST include data-testid attribute (kebab-case, role-based)."
+  },
+  "libraries_and_tools": {
+    "mapping": "react-leaflet or react-map-gl for satellite view and drawing distance lines.",
+    "icons": "@phosphor-icons/react (Duotone or Fill for active, Regular for inactive)",
+    "animations": "framer-motion for bottom sheets and FABs",
+    "toasts": "sonner for brief in-game notifications"
+  },
+  "image_urls": {
+    "home_hero": {
+      "url": "https://images.unsplash.com/photo-1596782680712-caf5530d2b3c?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1MDZ8MHwxfHNlYXJjaHw0fHxnb2xmZXIlMjBzdW5zZXQlMjBjb3Vyc2V8ZW58MHx8fHwxNzg3OTA1ODkxfDA&ixlib=rb-4.1.0&q=85",
+      "description": "Golfer on green fairway, used for home screen background or 'Start Round' card background with heavy overlay."
+    },
+    "placeholder_texture": {
+      "url": "https://images.unsplash.com/photo-1562204320-31975a5e09ce?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2ODh8MHwxfHNlYXJjaHwxfHxnb2xmJTIwYmFsbCUyMGdyYXNzJTIwY2xvc2UlMjB1cHxlbnwwfHx8fDE3ODc5MDU4OTF8MA&ixlib=rb-4.1.0&q=85",
+      "description": "Close up golf ball for subtle textural backgrounds or settings."
+    }
+  },
+  "instructions_to_main_agent": [
+    "Avoid generic centered layouts and standard Vercel/SaaS aesthetics. This is a premium sports tool.",
+    "Do NOT use transparent backgrounds for text overlaid on the map. Use solid white/black surfaces with crisp borders.",
+    "Use large touch targets. Users are outside, walking, wearing a glove possibly. Buttons must be massive.",
+    "The rangefinder text must be the visual anchor of the map screen. Use Anton font and make it text-5xl+.",
+    "Ensure data-testid attributes are on EVERYTHING interactive.",
+    "Create .js files, NOT .tsx files."
+  ],
+  "UNIVERSAL GUIDELINES FOR MAIN AGENT": "You tend to converge toward generic, 'on distribution' outputs. In frontend design, this creates what users call the 'AI slop' aesthetic. Avoid this: make creative, distinctive frontends that surprise and delight. Dark colors look good when used independently without gradients. DO NOT use dark colors as gradients. Don't make generic centered layouts, simplistic gradients, and uniform styling. Create depth through layered design elements with z-index hierarchy. Use glass-morphism effects with backdrop filters (12-24px blur) ONLY WHERE SAFE from sunlight glare. You MUST NOT apply universal transition. Eg: transition: all. Always add transitions for specific interactive elements like button, input excluding transforms. You MUST NOT center align the app container. Always use modern button styles like pill-shaped, or sharp button with interaction animations & color relevant to the app style. NEVER: use AI assistant Emoji characters. Every interaction needs micro-animations. Use 2-3x more spacing than feels comfortable. Prioritize using pre-existing components from src/components/ui when applicable. Use sonner for toasts."
+}
