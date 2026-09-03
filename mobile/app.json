@@ -20,7 +20,7 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
-        "backgroundColor": "#000000"
+        "backgroundColor": "#24422E"
       },
       "edgeToEdgeEnabled": true,
       "package": "com.emergent.smartgolfgps.ix61xw",
