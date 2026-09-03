@@ -186,7 +186,13 @@ async def list_courses():
 @api.post("/courses")
 async def create_course(course: Course):
     if not course.holes:
-        course.holes = [Hole(holeNumber=i + 1) for i in range(course.holeCount)]
+        # Sensible default par layout so scorecards work before mapping.
+        # Standard par-72 front/back nine; par-36 for a 9-hole course.
+        preset = [4, 5, 3, 4, 4, 3, 5, 4, 4, 4, 4, 5, 3, 4, 4, 3, 5, 4]
+        course.holes = [
+            Hole(holeNumber=i + 1, par=preset[i] if i < len(preset) else 4, handicap=i + 1)
+            for i in range(course.holeCount)
+        ]
     await db.courses.insert_one(course.model_dump())
     return course
 

@@ -68,6 +68,12 @@ iteration_3 (mobile enhancements): 4/4 PASS (GCash QR, Weather On Card, Voice Ca
 - Backend: /app/backend/ph_courses.py (54 major PH courses: name, location, region, lat/lng, holeCount) served at GET /api/courses/directory. Import reuses POST /api/courses (auto-generates blank holes from holeCount).
 - Mobile: app/ph-courses.tsx — searchable, region-grouped directory with one-tap ADD; entry via Courses screen "BROWSE PHILIPPINE COURSES" button. Coordinates are approximate pins; holes mapped later in the editor / on-site. Verified E2E (add Cebu Country Club).
 
+### PH directory v2 (2026-06)
+- Expanded catalog to 72 courses (added ~18 more nationwide).
+- Auto par presets: create_course now generates a standard par-72 (par-36 for 9-hole) hole layout so scorecards work before mapping. Verified pars total 72.
+- Nearest sort: ph-courses.tsx REGION/NEAREST toggle; NEAREST uses expo-location one-shot GPS + haversine to sort and show distance. Falls back to REGION if location denied.
+- Course badges: colored initials avatar + flag mark per course (real per-course photos unavailable, so branded initials used).
+
 ## Notes for next agent
 - Frontend GPS testing: grant geolocation + set_geolocation(7.0545, 125.5195) before nav; viewport 390x844
 - Settings singleton id="default"; demo course id "demo-apo-davao" — do not delete
