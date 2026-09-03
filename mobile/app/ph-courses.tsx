@@ -7,6 +7,8 @@ import { Ionicons } from "@expo/vector-icons";
 import { colors, font } from "@/src/theme";
 import { api } from "@/src/lib/api";
 import { haversineMeters } from "@/src/lib/geo";
+import { useSettings } from "@/src/context/SettingsContext";
+import { DirectoryMap } from "@/src/components/DirectoryMap";
 import { ScreenHeader } from "@/src/components/ui";
 import { toast } from "@/src/lib/toast";
 
@@ -27,13 +29,26 @@ function badgeColor(name: string) {
 export default function PhCourses() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { settings } = useSettings();
+  const imperial = settings.distanceUnit === "yd";
   const [list, setList] = useState<Entry[]>([]);
   const [query, setQuery] = useState("");
   const [added, setAdded] = useState<Record<string, boolean>>({});
   const [busy, setBusy] = useState<string | null>(null);
   const [sortMode, setSortMode] = useState<"region" | "nearest">("region");
+  const [viewMode, setViewMode] = useState<"list" | "map">("list");
+  const [selected, setSelected] = useState<Entry | null>(null);
   const [userPos, setUserPos] = useState<{ lat: number; lng: number } | null>(null);
   const [locating, setLocating] = useState(false);
+
+  const fmtDistance = (meters: number) => {
+    if (imperial) {
+      const mi = meters * 0.000621371;
+      return mi < 0.1 ? `${Math.round(meters * 3.28084)} ft` : `${mi.toFixed(mi < 10 ? 1 : 0)} mi`;
+    }
+    const km = meters / 1000;
+    return km < 1 ? `${Math.round(meters)} m` : `${km.toFixed(km < 10 ? 1 : 0)} km`;
+  };
 
   useEffect(() => {
     api.get("/courses/directory").then(setList).catch(() => toast.error("Could not load directory"));
@@ -99,7 +114,7 @@ export default function PhCourses() {
   const Row = ({ c }: { c: Entry }) => {
     const id = c.name.replace(/[^a-z0-9]/gi, "-").toLowerCase();
     const isAdded = added[c.name];
-    const distKm = userPos ? (haversineMeters(userPos, { lat: c.latitude, lng: c.longitude }) as number) / 1000 : null;
+    const distKm = userPos ? (haversineMeters(userPos, { lat: c.latitude, lng: c.longitude }) as number) : null;
     return (
       <View style={styles.card} testID={`ph-course-${id}`}>
         <View style={[styles.badge, { backgroundColor: badgeColor(c.name) }]}>
@@ -111,7 +126,7 @@ export default function PhCourses() {
         <View style={{ flex: 1, paddingHorizontal: 12 }}>
           <Text style={styles.name} numberOfLines={1}>{c.name}</Text>
           <Text style={styles.meta} numberOfLines={1}>
-            {c.location} · {c.holeCount} holes{distKm != null ? `  ·  ${distKm < 1 ? Math.round(distKm * 1000) + " m" : distKm.toFixed(distKm < 10 ? 1 : 0) + " km"}` : ""}
+            {c.location} · {c.holeCount} holes{distKm != null ? `  ·  ${fmtDistance(distKm)}` : ""}
           </Text>
         </View>
         <Pressable testID={`ph-add-${id}`} disabled={isAdded || busy === c.name} onPress={() => addCourse(c)} style={[styles.addBtn, isAdded ? styles.addedBtn : null]}>
@@ -158,8 +173,46 @@ export default function PhCourses() {
           {locating ? <ActivityIndicator size="small" color={sortMode === "nearest" ? "#fff" : colors.green} /> : <Ionicons name="navigate" size={13} color={sortMode === "nearest" ? "#fff" : colors.zinc500} />}
           <Text style={[styles.sortChipTxt, sortMode === "nearest" && { color: "#fff" }]}>NEAREST</Text>
         </Pressable>
+        <View style={{ flex: 1 }} />
+        <View style={styles.viewToggle}>
+          <Pressable testID="ph-view-list" onPress={() => setViewMode("list")} style={[styles.viewBtn, viewMode === "list" && styles.viewBtnOn]}>
+            <Ionicons name="list" size={16} color={viewMode === "list" ? "#fff" : colors.zinc500} />
+          </Pressable>
+          <Pressable testID="ph-view-map" onPress={() => { setViewMode("map"); if (!userPos) getLocation(); }} style={[styles.viewBtn, viewMode === "map" && styles.viewBtnOn]}>
+            <Ionicons name="map" size={16} color={viewMode === "map" ? "#fff" : colors.zinc500} />
+          </Pressable>
+        </View>
       </View>
 
+      {viewMode === "map" ? (
+        <View style={{ flex: 1 }} testID="ph-map-view">
+          <DirectoryMap courses={filtered} selectedName={selected?.name} onSelect={(c: Entry) => setSelected(c)} />
+          {selected && (
+            <View style={[styles.selCard, { bottom: insets.bottom + 16 }]} testID="ph-selected-card">
+              <View style={[styles.badge, { backgroundColor: badgeColor(selected.name) }]}>
+                <Text style={styles.badgeTxt}>{initials(selected.name)}</Text>
+              </View>
+              <View style={{ flex: 1, paddingHorizontal: 12 }}>
+                <Text style={styles.name} numberOfLines={1}>{selected.name}</Text>
+                <Text style={styles.meta} numberOfLines={1}>{selected.location} · {selected.holeCount} holes</Text>
+              </View>
+              <Pressable
+                testID="ph-selected-add"
+                disabled={!!added[selected.name] || busy === selected.name}
+                onPress={() => addCourse(selected)}
+                style={[styles.addBtn, added[selected.name] ? styles.addedBtn : null]}
+              >
+                {busy === selected.name ? <ActivityIndicator size="small" color="#fff" /> : (
+                  <>
+                    <Ionicons name={added[selected.name] ? "checkmark" : "add"} size={16} color={added[selected.name] ? colors.green : "#fff"} />
+                    <Text style={[styles.addTxt, added[selected.name] && { color: colors.green }]}>{added[selected.name] ? "ADDED" : "ADD"}</Text>
+                  </>
+                )}
+              </Pressable>
+            </View>
+          )}
+        </View>
+      ) : (
       <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40, gap: 8 }}>
         {filtered.length === 0 && <Text style={styles.empty}>No courses match "{query}".</Text>}
         {sortMode === "nearest" ? (
@@ -174,6 +227,7 @@ export default function PhCourses() {
         )}
         <Text style={styles.note}>Locations are approximate pins. Added courses start with a par-72 layout — map each hole's tee & greens in the Course Editor or on-site with GPS.</Text>
       </ScrollView>
+      )}
     </View>
   );
 }
@@ -187,6 +241,10 @@ const styles = StyleSheet.create({
   sortChip: { flexDirection: "row", alignItems: "center", gap: 5, height: 34, paddingHorizontal: 14, borderRadius: 10, backgroundColor: colors.zinc100 },
   sortChipOn: { backgroundColor: colors.green },
   sortChipTxt: { fontSize: 11, fontWeight: "900", color: colors.zinc500, letterSpacing: 0.5 },
+  viewToggle: { flexDirection: "row", backgroundColor: colors.zinc100, borderRadius: 10, padding: 2, gap: 2 },
+  viewBtn: { width: 38, height: 30, borderRadius: 8, alignItems: "center", justifyContent: "center" },
+  viewBtnOn: { backgroundColor: colors.green },
+  selCard: { position: "absolute", left: 16, right: 16, flexDirection: "row", alignItems: "center", backgroundColor: "#fff", borderRadius: 16, padding: 12, shadowColor: "#000", shadowOpacity: 0.25, shadowRadius: 12, elevation: 8 },
   region: { fontSize: 11, letterSpacing: 1.5, fontWeight: "800", color: colors.gold, marginTop: 10 },
   card: { flexDirection: "row", alignItems: "center", backgroundColor: "#fff", borderWidth: 1, borderColor: colors.zinc200, borderRadius: 16, paddingHorizontal: 12, paddingVertical: 12 },
   badge: { width: 44, height: 44, borderRadius: 12, alignItems: "center", justifyContent: "center" },

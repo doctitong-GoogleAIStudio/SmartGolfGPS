@@ -74,6 +74,12 @@ iteration_3 (mobile enhancements): 4/4 PASS (GCash QR, Weather On Card, Voice Ca
 - Nearest sort: ph-courses.tsx REGION/NEAREST toggle; NEAREST uses expo-location one-shot GPS + haversine to sort and show distance. Falls back to REGION if location denied.
 - Course badges: colored initials avatar + flag mark per course (real per-course photos unavailable, so branded initials used).
 
+### PH directory v3 (2026-06)
+- Catalog expanded to 82 courses.
+- Auto handicap index: create_course assigns a realistic stroke-index (unique 1..18 permutation; 1..9 for 9-hole) alongside par-72, so net scoring works before mapping. Verified unique permutation.
+- Directory Map View: ph-courses LIST/MAP toggle; MAP uses react-native-maps (DirectoryMap.tsx, web stub DirectoryMap.web.tsx) plotting all courses as pins; tap a pin -> selected card with ADD.
+- Distance units: directory distances shown in miles/ft when distanceUnit=yd (imperial), km/m when metric.
+
 ## Notes for next agent
 - Frontend GPS testing: grant geolocation + set_geolocation(7.0545, 125.5195) before nav; viewport 390x844
 - Settings singleton id="default"; demo course id "demo-apo-davao" — do not delete

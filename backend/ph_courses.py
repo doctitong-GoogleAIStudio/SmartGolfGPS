@@ -90,4 +90,15 @@ PH_COURSES = [
     {"name": "Beverly Place Golf Club", "location": "San Mateo, Rizal", "region": "Rizal", "latitude": 14.6900, "longitude": 121.1200, "holeCount": 9},
     {"name": "Riverbend Golf & Country Club", "location": "Bacolor, Pampanga", "region": "Central Luzon", "latitude": 14.9900, "longitude": 120.6400, "holeCount": 18},
     {"name": "Camp John Hay - Scout Barrio Nine", "location": "Baguio City, Benguet", "region": "Northern Luzon", "latitude": 16.4050, "longitude": 120.6150, "holeCount": 9},
+    # ---- Batch 3 ----
+    {"name": "The Palms Country Club", "location": "Alabang, Muntinlupa", "region": "Metro Manila", "latitude": 14.4200, "longitude": 121.0300, "holeCount": 9},
+    {"name": "Alabang Country Club", "location": "Muntinlupa, Metro Manila", "region": "Metro Manila", "latitude": 14.4200, "longitude": 121.0200, "holeCount": 9},
+    {"name": "Summit Point Golf & Country Club", "location": "Lipa, Batangas", "region": "Batangas", "latitude": 13.9500, "longitude": 121.1300, "holeCount": 18},
+    {"name": "Caliraya Springs Golf Club", "location": "Lumban, Laguna", "region": "Cavite / Laguna", "latitude": 14.2800, "longitude": 121.5500, "holeCount": 18},
+    {"name": "Clearwater (Sacobia) Golf Course", "location": "Bamban, Tarlac", "region": "Central Luzon", "latitude": 15.2400, "longitude": 120.5400, "holeCount": 18},
+    {"name": "Fort Magsaysay Golf Course", "location": "Palayan, Nueva Ecija", "region": "Central Luzon", "latitude": 15.5400, "longitude": 121.0800, "holeCount": 9},
+    {"name": "Kingsborough Golf Club", "location": "Marilao, Bulacan", "region": "Central Luzon", "latitude": 14.7600, "longitude": 120.9400, "holeCount": 9},
+    {"name": "Cagayan Golf & Country Club", "location": "Tuguegarao, Cagayan", "region": "Northern Luzon", "latitude": 17.6100, "longitude": 121.7200, "holeCount": 9},
+    {"name": "Negros Oriental Golf & Country Club", "location": "Dumaguete, Negros Oriental", "region": "Visayas", "latitude": 9.3100, "longitude": 123.3000, "holeCount": 9},
+    {"name": "Camp Keithley Golf Course", "location": "Marawi, Lanao del Sur", "region": "Mindanao", "latitude": 8.0000, "longitude": 124.3000, "holeCount": 9},
 ]
