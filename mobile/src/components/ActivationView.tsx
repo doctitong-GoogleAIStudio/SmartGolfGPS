@@ -173,7 +173,7 @@ function GCashQR() {
   let source: any = null;
   try {
     // Owner uploads /app/mobile/assets/images/gcash-qr.png
-    source = require("@/assets/images/gcash-pay3.png");
+    source = require("@/assets/images/gcash-pay4.png");
   } catch {
     source = null;
   }
