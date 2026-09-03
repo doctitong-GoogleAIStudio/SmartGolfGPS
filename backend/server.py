@@ -11,7 +11,7 @@ from typing import List, Optional
 
 import httpx
 from fastapi import FastAPI, APIRouter, HTTPException
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, FileResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -259,6 +259,16 @@ async def import_course(body: dict):
     await db.courses.insert_one(clone)
     clone.pop("_id", None)
     return clone
+
+
+@api.get("/tools/activation-generator")
+async def download_activation_generator():
+    """Serve the standalone, fully-offline Activation Generator HTML as a download.
+    Open it once online to save it, then it runs with no internet."""
+    path = Path(__file__).resolve().parent.parent / "tools" / "activation-generator.html"
+    if not path.exists():
+        raise HTTPException(404, "Generator not found")
+    return FileResponse(str(path), media_type="text/html", filename="activation-generator.html")
 
 
 # ---------- Bag ----------

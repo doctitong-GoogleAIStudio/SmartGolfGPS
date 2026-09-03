@@ -13,7 +13,8 @@
   h1 { font-size:26px; margin:8px 0 4px; }
   p.sub { color:rgba(255,255,255,0.6); font-size:14px; margin:0 0 20px; line-height:1.4; }
   label { display:block; font-size:11px; letter-spacing:1.5px; font-weight:800; color:rgba(255,255,255,0.5); margin:18px 0 8px; }
-  input { width:100%; height:54px; border-radius:14px; border:none; padding:0 16px; font-size:18px; font-weight:700; letter-spacing:2px; text-transform:uppercase; }
+  input { width:100%; height:54px; border-radius:14px; border:none; padding:0 16px; font-size:18px; font-weight:700; }
+  input.code { letter-spacing:2px; text-transform:uppercase; }
   button { width:100%; height:56px; margin-top:20px; border:none; border-radius:16px; background:var(--gold); color:var(--char); font-weight:900; letter-spacing:1.5px; font-size:15px; cursor:pointer; }
   button:active { transform:scale(0.99); }
   .result { margin-top:22px; background:var(--green); border-radius:16px; padding:18px; text-align:center; display:none; }
@@ -22,16 +23,34 @@
   .result .hint { font-size:12px; color:rgba(255,255,255,0.7); }
   .copy { margin-top:10px; background:rgba(255,255,255,0.15); color:#fff; height:40px; border-radius:10px; font-size:12px; }
   .note { margin-top:20px; font-size:11px; color:rgba(255,255,255,0.4); line-height:1.5; }
+  .lock { margin-top:16px; text-align:center; }
+  .lock a { color:rgba(255,255,255,0.4); font-size:12px; text-decoration:underline; cursor:pointer; }
+  .hidden { display:none; }
+  .err { color:#FCA5A5; font-size:12px; margin-top:10px; min-height:14px; }
 </style>
 </head>
 <body>
-  <div class="card">
+  <!-- LOGIN GATE -->
+  <div class="card" id="loginCard">
+    <div class="badge">SMART GOLF GPS · ADMIN</div>
+    <h1>Sign in</h1>
+    <p class="sub">Enter your admin username and password to open the Activation Generator. This is stored on this device — you won't need to sign in again on this browser.</p>
+    <label>USERNAME</label>
+    <input id="user" autocomplete="username" placeholder="username" />
+    <label>PASSWORD</label>
+    <input id="pass" type="password" autocomplete="current-password" placeholder="password" />
+    <div class="err" id="loginErr"></div>
+    <button onclick="login()">UNLOCK GENERATOR</button>
+  </div>
+
+  <!-- GENERATOR -->
+  <div class="card hidden" id="genCard">
     <div class="badge">SMART GOLF GPS · ADMIN</div>
     <h1>Activation Generator</h1>
     <p class="sub">Paste the customer's <strong>Device ID</strong> (from their email) to generate their unique activation code. Works fully offline.</p>
 
     <label>DEVICE ID</label>
-    <input id="deviceId" placeholder="XXXX-XXXX-XXXX" autocomplete="off" />
+    <input id="deviceId" class="code" placeholder="XXXX-XXXX-XXXX" autocomplete="off" />
 
     <button onclick="generate()">GENERATE ACTIVATION CODE</button>
 
@@ -42,11 +61,43 @@
     </div>
 
     <p class="note">Send this code back to the customer. It only unlocks the device with the matching Device ID. Keep this file private — it contains the signing secret.</p>
+    <div class="lock"><a onclick="lock()">Sign out / lock this generator</a></div>
   </div>
 
 <script>
+  // =====================================================================
+  // ADMIN LOGIN — change these two values to your own username/password.
+  // (Everything runs locally; no internet is used.)
+  // =====================================================================
+  const AUTH_USER = "admin";
+  const AUTH_PASS = "SmartGolf2026";
+
   // MUST match ACTIVATION_SECRET in /app/mobile/src/lib/license.ts exactly.
   const ACTIVATION_SECRET = "SG-GPS-2026::a7Fq9zLpW3xR6mB2::VINCENT-CADDIE";
+
+  const UNLOCK_KEY = "sg_gen_unlocked_v1";
+
+  function showGenerator() {
+    document.getElementById("loginCard").classList.add("hidden");
+    document.getElementById("genCard").classList.remove("hidden");
+  }
+
+  function login() {
+    const u = document.getElementById("user").value.trim();
+    const p = document.getElementById("pass").value;
+    if (u === AUTH_USER && p === AUTH_PASS) {
+      try { localStorage.setItem(UNLOCK_KEY, "1"); } catch (e) {}
+      document.getElementById("loginErr").textContent = "";
+      showGenerator();
+    } else {
+      document.getElementById("loginErr").textContent = "Incorrect username or password.";
+    }
+  }
+
+  function lock() {
+    try { localStorage.removeItem(UNLOCK_KEY); } catch (e) {}
+    location.reload();
+  }
 
   function normalize(s) { return (s || "").replace(/[^a-zA-Z0-9]/g, "").toUpperCase(); }
 
@@ -73,6 +124,11 @@
     const code = document.getElementById("code").textContent;
     navigator.clipboard.writeText(code).then(() => alert("Copied: " + code));
   }
+
+  // Persist the unlocked session — no sign-in needed again on this browser/file.
+  try { if (localStorage.getItem(UNLOCK_KEY) === "1") showGenerator(); } catch (e) {}
+  // Allow Enter to submit login.
+  document.getElementById("pass").addEventListener("keydown", function (e) { if (e.key === "Enter") login(); });
 </script>
 </body>
 </html>
