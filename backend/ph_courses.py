@@ -101,4 +101,22 @@ PH_COURSES = [
     {"name": "Cagayan Golf & Country Club", "location": "Tuguegarao, Cagayan", "region": "Northern Luzon", "latitude": 17.6100, "longitude": 121.7200, "holeCount": 9},
     {"name": "Negros Oriental Golf & Country Club", "location": "Dumaguete, Negros Oriental", "region": "Visayas", "latitude": 9.3100, "longitude": 123.3000, "holeCount": 9},
     {"name": "Camp Keithley Golf Course", "location": "Marawi, Lanao del Sur", "region": "Mindanao", "latitude": 8.0000, "longitude": 124.3000, "holeCount": 9},
+    # ---- Batch 4 ----
+    {"name": "Palo Alto Golf & Country Club", "location": "Baras, Rizal", "region": "Rizal", "latitude": 14.5300, "longitude": 121.2700, "holeCount": 18},
+    {"name": "Timberland Highlands Golf Course", "location": "San Mateo, Rizal", "region": "Rizal", "latitude": 14.7200, "longitude": 121.1300, "holeCount": 9},
+    {"name": "Ponderosa Golf & Country Club", "location": "Tuba, Benguet", "region": "Northern Luzon", "latitude": 16.3600, "longitude": 120.6000, "holeCount": 9},
+    {"name": "Camp Panacan Golf Course", "location": "Davao City, Davao del Sur", "region": "Mindanao", "latitude": 7.1300, "longitude": 125.6500, "holeCount": 9},
+    # ---- Batch 5 ----
+    {"name": "Southwoods Ridge Golf Club", "location": "Biñan, Laguna", "region": "Cavite / Laguna", "latitude": 14.3200, "longitude": 121.0800, "holeCount": 18},
+    {"name": "Royale Tagaytay Country Club", "location": "Alfonso, Cavite", "region": "Tagaytay", "latitude": 14.1300, "longitude": 120.8500, "holeCount": 18},
+    {"name": "Aquamarine Golf Course", "location": "Silang, Cavite", "region": "Cavite / Laguna", "latitude": 14.2300, "longitude": 120.9700, "holeCount": 9},
+    {"name": "Sacobia Golf Club", "location": "Angeles, Pampanga", "region": "Central Luzon", "latitude": 15.1800, "longitude": 120.5600, "holeCount": 18},
+    {"name": "Nueva Ecija Golf & Country Club", "location": "Cabanatuan, Nueva Ecija", "region": "Central Luzon", "latitude": 15.4900, "longitude": 120.9700, "holeCount": 9},
+    {"name": "Aguinaldo Highway Golf Range", "location": "Dasmariñas, Cavite", "region": "Cavite / Laguna", "latitude": 14.3200, "longitude": 120.9400, "holeCount": 9},
+    {"name": "Vista del Mar Golf Course", "location": "Talomo, Davao City", "region": "Mindanao", "latitude": 7.0600, "longitude": 125.5600, "holeCount": 18},
+    {"name": "Sarangani Highlands Golf Club", "location": "Alabel, Sarangani", "region": "Mindanao", "latitude": 6.1000, "longitude": 125.2900, "holeCount": 9},
+    {"name": "Sirawai Golf Course", "location": "Cotabato City, Maguindanao", "region": "Mindanao", "latitude": 7.2200, "longitude": 124.2500, "holeCount": 9},
+    {"name": "Bantayan Island Golf Course", "location": "Bantayan, Cebu", "region": "Visayas", "latitude": 11.1700, "longitude": 123.7200, "holeCount": 9},
+    {"name": "Sta. Barbara (Iloilo) Executive Course", "location": "Sta. Barbara, Iloilo", "region": "Visayas", "latitude": 10.8300, "longitude": 122.5300, "holeCount": 9},
+    {"name": "Vigan Golf Club", "location": "Vigan, Ilocos Sur", "region": "Northern Luzon", "latitude": 17.5700, "longitude": 120.3900, "holeCount": 9},
 ]

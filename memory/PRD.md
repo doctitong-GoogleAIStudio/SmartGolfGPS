@@ -80,6 +80,13 @@ iteration_3 (mobile enhancements): 4/4 PASS (GCash QR, Weather On Card, Voice Ca
 - Directory Map View: ph-courses LIST/MAP toggle; MAP uses react-native-maps (DirectoryMap.tsx, web stub DirectoryMap.web.tsx) plotting all courses as pins; tap a pin -> selected card with ADD.
 - Distance units: directory distances shown in miles/ft when distanceUnit=yd (imperial), km/m when metric.
 
+### PH directory v4 (2026-06)
+- Catalog expanded to 98 courses (backend ph_courses.py, 11 regions).
+- Region filter chips: ph-courses.tsx single horizontal scroller (All + one chip per detailed region — Metro Manila, Cavite/Laguna, Rizal, Tagaytay, Batangas, Central Luzon, Northern Luzon, Bicol, Visayas, Mindanao, Palawan); selected chip = charcoal. Filters both list & map views.
+- Recently Added: courses you import persist across restarts in storage key "sg_recent_courses" (max 12); shown as a horizontal quick-jump strip atop the list (tap = search that course). Seeds the ADDED button state on load.
+- Map callouts: DirectoryMap.tsx markers now show a name bubble on tap via react-native-maps <Callout> (native-only; not visible in web preview stub).
+- Verified via Expo web preview: region chips render, Visayas filter works, Recently Added strip persists with ADDED state. Callouts unverifiable on web (native maps).
+
 ## Notes for next agent
 - Frontend GPS testing: grant geolocation + set_geolocation(7.0545, 125.5195) before nav; viewport 390x844
 - Settings singleton id="default"; demo course id "demo-apo-davao" — do not delete

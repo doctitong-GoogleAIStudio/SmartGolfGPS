@@ -11,6 +11,9 @@ import { useSettings } from "@/src/context/SettingsContext";
 import { DirectoryMap } from "@/src/components/DirectoryMap";
 import { ScreenHeader } from "@/src/components/ui";
 import { toast } from "@/src/lib/toast";
+import { storage } from "@/src/utils/storage";
+
+const RECENT_KEY = "sg_recent_courses";
 
 type Entry = { name: string; location: string; region: string; latitude: number; longitude: number; holeCount: number };
 
@@ -40,6 +43,8 @@ export default function PhCourses() {
   const [selected, setSelected] = useState<Entry | null>(null);
   const [userPos, setUserPos] = useState<{ lat: number; lng: number } | null>(null);
   const [locating, setLocating] = useState(false);
+  const [regionFilter, setRegionFilter] = useState<string>("");
+  const [recent, setRecent] = useState<Entry[]>([]);
 
   const fmtDistance = (meters: number) => {
     if (imperial) {
@@ -52,6 +57,11 @@ export default function PhCourses() {
 
   useEffect(() => {
     api.get("/courses/directory").then(setList).catch(() => toast.error("Could not load directory"));
+    storage.getItem<Entry[]>(RECENT_KEY, []).then((r) => {
+      const rr = r || [];
+      setRecent(rr);
+      setAdded(Object.fromEntries(rr.map((c) => [c.name, true])));
+    });
   }, []);
 
   const getLocation = async () => {
@@ -80,11 +90,20 @@ export default function PhCourses() {
     if (!userPos) getLocation();
   };
 
+  const regions = useMemo(() => {
+    const seen: string[] = [];
+    for (const c of list) if (!seen.includes(c.region)) seen.push(c.region);
+    return seen;
+  }, [list]);
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return list;
-    return list.filter((c) => `${c.name} ${c.location} ${c.region}`.toLowerCase().includes(q));
-  }, [list, query]);
+    return list.filter((c) => {
+      if (regionFilter && c.region !== regionFilter) return false;
+      if (q && !`${c.name} ${c.location} ${c.region}`.toLowerCase().includes(q)) return false;
+      return true;
+    });
+  }, [list, query, regionFilter]);
 
   const grouped = useMemo(() => {
     const g: Record<string, Entry[]> = {};
@@ -104,6 +123,11 @@ export default function PhCourses() {
     try {
       await api.post("/courses", { name: c.name, location: c.location, latitude: c.latitude, longitude: c.longitude, holeCount: c.holeCount, holes: [] });
       setAdded((a) => ({ ...a, [c.name]: true }));
+      setRecent((prev) => {
+        const next = [c, ...prev.filter((r) => r.name !== c.name)].slice(0, 12);
+        storage.setItem(RECENT_KEY, next);
+        return next;
+      });
       toast.success(`Added "${c.name}"`, "Par-72 layout ready. Map holes in the editor or on-site.");
     } catch {
       toast.error("Could not add course");
@@ -184,6 +208,17 @@ export default function PhCourses() {
         </View>
       </View>
 
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipsScroll} contentContainerStyle={styles.chipsContent} testID="ph-region-chips">
+        <Pressable testID="ph-region-all" onPress={() => setRegionFilter("")} style={[styles.regionChip, regionFilter === "" && styles.regionChipOn]}>
+          <Text style={[styles.regionChipTxt, regionFilter === "" && { color: "#fff" }]}>All</Text>
+        </Pressable>
+        {regions.map((r) => (
+          <Pressable key={r} testID={`ph-region-${r.replace(/[^a-z0-9]/gi, "-").toLowerCase()}`} onPress={() => setRegionFilter(r === regionFilter ? "" : r)} style={[styles.regionChip, regionFilter === r && styles.regionChipOn]}>
+            <Text style={[styles.regionChipTxt, regionFilter === r && { color: "#fff" }]}>{r}</Text>
+          </Pressable>
+        ))}
+      </ScrollView>
+
       {viewMode === "map" ? (
         <View style={{ flex: 1 }} testID="ph-map-view">
           <DirectoryMap courses={filtered} selectedName={selected?.name} onSelect={(c: Entry) => setSelected(c)} />
@@ -214,7 +249,22 @@ export default function PhCourses() {
         </View>
       ) : (
       <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40, gap: 8 }}>
-        {filtered.length === 0 && <Text style={styles.empty}>No courses match "{query}".</Text>}
+        {recent.length > 0 && !query && !regionFilter && (
+          <View style={{ gap: 8, marginBottom: 4 }} testID="ph-recent-section">
+            <Text style={styles.region}>RECENTLY ADDED</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingRight: 8 }}>
+              {recent.map((c) => (
+                <Pressable key={c.name} testID={`ph-recent-${c.name.replace(/[^a-z0-9]/gi, "-").toLowerCase()}`} onPress={() => setQuery(c.name)} style={styles.recentCard}>
+                  <View style={[styles.recentBadge, { backgroundColor: badgeColor(c.name) }]}>
+                    <Text style={styles.badgeTxt}>{initials(c.name)}</Text>
+                  </View>
+                  <Text style={styles.recentName} numberOfLines={2}>{c.name}</Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+          </View>
+        )}
+        {filtered.length === 0 && <Text style={styles.empty}>{query ? `No courses match "${query}".` : "No courses in this region yet."}</Text>}
         {sortMode === "nearest" ? (
           nearestSorted.map((c) => <Row key={c.name} c={c} />)
         ) : (
@@ -241,6 +291,14 @@ const styles = StyleSheet.create({
   sortChip: { flexDirection: "row", alignItems: "center", gap: 5, height: 34, paddingHorizontal: 14, borderRadius: 10, backgroundColor: colors.zinc100 },
   sortChipOn: { backgroundColor: colors.green },
   sortChipTxt: { fontSize: 11, fontWeight: "900", color: colors.zinc500, letterSpacing: 0.5 },
+  chipsScroll: { flexGrow: 0, flexShrink: 0, marginTop: 12 },
+  chipsContent: { paddingHorizontal: 16, gap: 8, alignItems: "center", paddingVertical: 2 },
+  regionChip: { height: 34, paddingHorizontal: 14, borderRadius: 10, backgroundColor: colors.zinc100, alignItems: "center", justifyContent: "center", flexShrink: 0 },
+  regionChipOn: { backgroundColor: colors.charcoal },
+  regionChipTxt: { fontSize: 12, fontWeight: "800", color: colors.zinc500 },
+  recentCard: { width: 116, backgroundColor: "#fff", borderWidth: 1, borderColor: colors.zinc200, borderRadius: 14, padding: 10, alignItems: "center", gap: 6 },
+  recentBadge: { width: 40, height: 40, borderRadius: 10, alignItems: "center", justifyContent: "center" },
+  recentName: { fontSize: 11, fontWeight: "800", color: colors.charcoal, textAlign: "center" },
   viewToggle: { flexDirection: "row", backgroundColor: colors.zinc100, borderRadius: 10, padding: 2, gap: 2 },
   viewBtn: { width: 38, height: 30, borderRadius: 8, alignItems: "center", justifyContent: "center" },
   viewBtnOn: { backgroundColor: colors.green },

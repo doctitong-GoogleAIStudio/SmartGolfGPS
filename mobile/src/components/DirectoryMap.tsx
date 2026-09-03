@@ -1,6 +1,6 @@
 import React, { useRef, useEffect } from "react";
-import { StyleSheet } from "react-native";
-import MapView, { Marker } from "react-native-maps";
+import { StyleSheet, View, Text } from "react-native";
+import MapView, { Marker, Callout } from "react-native-maps";
 import { colors } from "@/src/theme";
 
 type Entry = { name: string; latitude: number; longitude: number };
@@ -26,9 +26,20 @@ export function DirectoryMap({ courses, selectedName, onSelect, style }: { cours
       {courses.map((c) => {
         const sel = c.name === selectedName;
         return (
-          <Marker key={c.name} coordinate={{ latitude: c.latitude, longitude: c.longitude }} onPress={() => onSelect(c)} pinColor={sel ? colors.gold : colors.green} />
+          <Marker key={c.name} coordinate={{ latitude: c.latitude, longitude: c.longitude }} onPress={() => onSelect(c)} pinColor={sel ? colors.gold : colors.green} testID={`directory-pin-${c.name.replace(/[^a-z0-9]/gi, "-").toLowerCase()}`}>
+            <Callout onPress={() => onSelect(c)}>
+              <View style={styles.callout}>
+                <Text style={styles.calloutName} numberOfLines={2}>{c.name}</Text>
+              </View>
+            </Callout>
+          </Marker>
         );
       })}
     </MapView>
   );
 }
+
+const styles = StyleSheet.create({
+  callout: { paddingVertical: 4, paddingHorizontal: 8, maxWidth: 200 },
+  calloutName: { fontWeight: "800", fontSize: 13, color: colors.charcoal },
+});
