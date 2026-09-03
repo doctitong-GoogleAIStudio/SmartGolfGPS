@@ -16,6 +16,7 @@ from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel, Field
+from ph_courses import PH_COURSES
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -188,6 +189,12 @@ async def create_course(course: Course):
         course.holes = [Hole(holeNumber=i + 1) for i in range(course.holeCount)]
     await db.courses.insert_one(course.model_dump())
     return course
+
+
+@api.get("/courses/directory")
+async def courses_directory():
+    """Browsable catalog of major Philippine golf courses (for import)."""
+    return PH_COURSES
 
 
 @api.get("/courses/{course_id}")

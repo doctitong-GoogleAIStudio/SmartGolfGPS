@@ -85,6 +85,11 @@ export default function Courses() {
             <Text style={styles.importBtnTxt}>IMPORT</Text>
           </Pressable>
         </View>
+        <Pressable style={styles.phBtn} onPress={() => router.push("/ph-courses")} testID="browse-ph-courses-btn">
+          <Ionicons name="flag" size={18} color={colors.gold} />
+          <Text style={styles.phBtnTxt}>BROWSE PHILIPPINE COURSES</Text>
+          <Ionicons name="chevron-forward" size={16} color="rgba(255,255,255,0.5)" />
+        </Pressable>
         {courses.map((c) => (
           <View key={c.id} style={styles.card} testID={`course-card-${c.id}`}>
             <Text style={[styles.cName, { fontFamily: font.headBold }]}>{c.name}</Text>
@@ -161,6 +166,8 @@ const styles = StyleSheet.create({
   newBtnTxt: { color: "#fff", fontWeight: "900", letterSpacing: 1.5 },
   importBtn: { height: 56, paddingHorizontal: 18, borderRadius: 18, backgroundColor: "#fff", borderWidth: 1, borderColor: colors.green, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 },
   importBtnTxt: { color: colors.green, fontWeight: "900", letterSpacing: 1.5 },
+  phBtn: { height: 52, borderRadius: 16, backgroundColor: colors.charcoal, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, paddingHorizontal: 16 },
+  phBtnTxt: { color: "#fff", fontWeight: "900", letterSpacing: 1, fontSize: 13 },
   importHint: { fontSize: 13, color: colors.zinc500, fontWeight: "600", lineHeight: 19, marginTop: -4 },
   card: { backgroundColor: "#fff", borderWidth: 1, borderColor: colors.zinc200, borderRadius: 18, padding: 16 },
   cName: { fontWeight: "800", fontSize: 15, color: colors.charcoal },

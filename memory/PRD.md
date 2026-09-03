@@ -64,6 +64,10 @@ iteration_3 (mobile enhancements): 4/4 PASS (GCash QR, Weather On Card, Voice Ca
 - Auto Putt Prompt On Hole Change: tapping next/prev hole with a scored-but-putt-less hole prompts to log putts.
 - Bug fixed: Play.tsx roundScores was stale vs Score tab -> savePutts clobbered scores. Fixed by re-fetching roundScores on MAP focus + re-reading fresh scores before PUT. Verified score+putts both persist.
 
+### Philippine Courses directory (2026-06)
+- Backend: /app/backend/ph_courses.py (54 major PH courses: name, location, region, lat/lng, holeCount) served at GET /api/courses/directory. Import reuses POST /api/courses (auto-generates blank holes from holeCount).
+- Mobile: app/ph-courses.tsx — searchable, region-grouped directory with one-tap ADD; entry via Courses screen "BROWSE PHILIPPINE COURSES" button. Coordinates are approximate pins; holes mapped later in the editor / on-site. Verified E2E (add Cebu Country Club).
+
 ## Notes for next agent
 - Frontend GPS testing: grant geolocation + set_geolocation(7.0545, 125.5195) before nav; viewport 390x844
 - Settings singleton id="default"; demo course id "demo-apo-davao" — do not delete
