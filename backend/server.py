@@ -95,6 +95,10 @@ class Course(BaseModel):
     holeCount: int = 18
     isDemo: bool = False
     holes: List[Hole] = []
+    clubhouse: Optional[LatLng] = None
+    drivingRange: Optional[LatLng] = None
+    practiceGreen: Optional[LatLng] = None
+    parking: Optional[LatLng] = None
     createdAt: str = Field(default_factory=now_iso)
     shareCode: Optional[str] = None
 
@@ -626,14 +630,21 @@ def build_demo_course():
                           hazards=hazards))
     return Course(id="demo-apo-davao", name="Apo Highlands Demo (DEMO DATA)",
                   location="Davao City, Philippines (simulated coordinates)",
-                  latitude=base_lat, longitude=base_lng, holeCount=18, isDemo=True, holes=holes)
+                  latitude=base_lat, longitude=base_lng, holeCount=18, isDemo=True, holes=holes,
+                  clubhouse=_ll(dest(base_lat, base_lng, 0, 60)),
+                  drivingRange=_ll(dest(base_lat, base_lng, 300, 140)),
+                  practiceGreen=_ll(dest(base_lat, base_lng, 45, 90)),
+                  parking=_ll(dest(base_lat, base_lng, 180, 120)))
+
+
+def _ll(t):
+    return LatLng(lat=t[0], lng=t[1])
 
 
 @app.on_event("startup")
 async def seed():
-    if not await db.courses.find_one({"id": "demo-apo-davao"}):
-        await db.courses.insert_one(build_demo_course().model_dump())
-        logger.info("Seeded demo course")
+    await db.courses.replace_one({"id": "demo-apo-davao"}, build_demo_course().model_dump(), upsert=True)
+    logger.info("Seeded/updated demo course")
     if not await db.bags.find_one({"id": "default"}):
         await db.bags.insert_one(default_bag().model_dump())
     if not await db.settings.find_one({"id": "default"}):

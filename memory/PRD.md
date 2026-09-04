@@ -101,6 +101,13 @@ iteration_3 (mobile enhancements): 4/4 PASS (GCash QR, Weather On Card, Voice Ca
 
 ## Notes for next agent
 
+### Green Detail + Course Navigation + Hole Selector Grid (2026-06)
+- GREEN DETAIL: overview VIEW GREEN sets sg_focus="green"; play.tsx places a draggable PIN on the green, zooms in (GolfMap focusKey/focusTarget easeTo, focusZoom~18.5), and persists the dragged pin per hole in storage sg_pins_{courseId} (restored on hole/return). onTargetDrag saves when label==="PIN".
+- COURSE NAVIGATION: overview NAVIGATE sheet lists Hole 1 Tee + Clubhouse/DrivingRange/PracticeGreen/Parking with live distance + 8-pt compass (from useGPS) and a SHOW button that recenters CourseOverviewMap (focusKey/focusTarget). Backend Course model gained optional clubhouse/drivingRange/practiceGreen/parking LatLng; demo course seeded with them (seed() now upserts the demo course each startup).
+- HOLE SELECTOR GRID: overview HOLES button → 1–18 grid → goHole(n).
+- Verified: iteration_10 — backend 14/14 pytest (incl. demo POIs), mobile grid/nav/view-green flows + regression, 0 console errors. Native-only visuals (green zoom, draggable pin, POI markers) confirm on device build.
+- REMAINING (spec backlog): admin editor to place POIs + draw polygons (fairway/green/bunker/water/OB); GPS power modes; hazard front/carry/back distances panel; performance trends/advanced analytics; distinct NAVIGATE-TO-TEE turn-by-turn.
+
 ### PHASE 1 — Full 18-Hole Course Overview + Start-Round workflow (2026-06)
 - New route app/course-overview.tsx + src/components/CourseOverviewMap.tsx (native MapLibre) with .web.tsx stub. Shows all holes at once: numbered tee markers (1–18), green flag markers, dashed green→next-tee route, "START HERE" badge on hole 1, auto fitBounds(all tee+green coords) with padding, live GPS dot, and a tap-hole popup (Par/dist/HCP + live tee distance & 8-pt compass via useGPS).
 - Workflow: start-round.tsx START ROUND now routes to /course-overview (round already created); overview START ROUND → /play at hole 1; per-hole VIEW HOLE/NAVIGATE TO TEE/VIEW GREEN → /play at that hole via storage key sg_start_hole (play.tsx reads+clears it in the focus effect). play.tsx added COURSE OVERVIEW button (rf-overview-btn) + Distance Arcs toggle (dist-arcs-btn).

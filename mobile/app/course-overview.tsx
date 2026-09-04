@@ -21,6 +21,9 @@ export default function CourseOverview() {
   const { pos: gpsPos } = useGPS(true);
   const [course, setCourse] = useState<any>(null);
   const [sel, setSel] = useState<number | null>(null);
+  const [gridOpen, setGridOpen] = useState(false);
+  const [navOpen, setNavOpen] = useState(false);
+  const [focus, setFocus] = useState<{ key: number; point: any } | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -46,12 +49,26 @@ export default function CourseOverview() {
     return { d, dir: COMPASS[Math.round(b / 45) % 8] };
   }, [selHole, gpsPos]);
 
-  const goHole = async (n: number) => {
+  const goHole = async (n: number, focusMode?: string) => {
     if (course) await storage.setItem("sg_quick_course", course.id);
     await storage.setItem("sg_start_hole", String(n));
-    setSel(null);
+    if (focusMode) await storage.setItem("sg_focus", focusMode);
+    setSel(null); setGridOpen(false);
     router.replace("/play");
   };
+
+  const distDir = (pt: any) => {
+    if (!pt || !gpsPos) return null;
+    return { d: haversineMeters(gpsPos, pt) as number, dir: COMPASS[Math.round(bearingDeg(gpsPos, pt) / 45) % 8] };
+  };
+
+  const pois: any[] = [
+    holes[0]?.tee && { key: "tee", label: "Hole 1 Tee", pt: holes[0].tee, icon: "flag" },
+    course?.clubhouse && { key: "club", label: "Clubhouse", pt: course.clubhouse, icon: "home" },
+    course?.drivingRange && { key: "range", label: "Driving Range", pt: course.drivingRange, icon: "golf" },
+    course?.practiceGreen && { key: "pgreen", label: "Practice Green", pt: course.practiceGreen, icon: "ellipse" },
+    course?.parking && { key: "park", label: "Parking", pt: course.parking, icon: "car" },
+  ].filter(Boolean);
 
   const startRound = async () => {
     const a = await getActiveRound();
@@ -62,7 +79,7 @@ export default function CourseOverview() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.charcoal }} testID="course-overview-screen">
-      <CourseOverviewMap holes={holes} gpsPos={gpsPos} onHolePress={(i) => setSel(i)} />
+      <CourseOverviewMap holes={holes} gpsPos={gpsPos} pois={pois} focusKey={focus?.key} focusTarget={focus?.point} onHolePress={(i) => setSel(i)} />
 
       {/* Header card */}
       <View style={[styles.header, { top: insets.top + 8 }]} pointerEvents="box-none">
@@ -77,11 +94,63 @@ export default function CourseOverview() {
 
       {/* Start round */}
       <View style={[styles.bottom, { paddingBottom: insets.bottom + 12 }]} pointerEvents="box-none">
+        <View style={styles.actionRow}>
+          <Pressable style={styles.secBtn} onPress={() => setGridOpen(true)} testID="overview-holes-btn">
+            <Ionicons name="grid" size={16} color={colors.charcoal} />
+            <Text style={styles.secTxt}>HOLES</Text>
+          </Pressable>
+          <Pressable style={styles.secBtn} onPress={() => setNavOpen(true)} testID="overview-navigate-btn">
+            <Ionicons name="compass" size={16} color={colors.charcoal} />
+            <Text style={styles.secTxt}>NAVIGATE</Text>
+          </Pressable>
+        </View>
         <Pressable style={styles.startBtn} onPress={startRound} testID="overview-start-round-btn">
           <Ionicons name="flag" size={18} color={colors.gold} />
           <Text style={styles.startTxt}>START ROUND · HOLE 1</Text>
         </Pressable>
       </View>
+
+      {/* Hole selector grid */}
+      <Modal visible={gridOpen} transparent animationType="fade" onRequestClose={() => setGridOpen(false)}>
+        <Pressable style={styles.backdrop} onPress={() => setGridOpen(false)}>
+          <Pressable style={styles.sheet} testID="overview-hole-grid">
+            <Text style={[styles.hName, { fontFamily: font.headBold }]}>JUMP TO HOLE</Text>
+            <View style={styles.grid}>
+              {holes.map((h) => (
+                <Pressable key={h.holeNumber} style={styles.gridCell} onPress={() => goHole(h.holeNumber)} testID={`grid-hole-${h.holeNumber}`}>
+                  <Text style={styles.gridNum}>{h.holeNumber}</Text>
+                  <Text style={styles.gridPar}>P{h.par}</Text>
+                </Pressable>
+              ))}
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* Course navigation */}
+      <Modal visible={navOpen} transparent animationType="fade" onRequestClose={() => setNavOpen(false)}>
+        <Pressable style={styles.backdrop} onPress={() => setNavOpen(false)}>
+          <Pressable style={styles.sheet} testID="overview-nav-sheet">
+            <Text style={[styles.hName, { fontFamily: font.headBold }]}>COURSE NAVIGATION</Text>
+            {!gpsPos && <Text style={styles.hMeta}>Waiting for GPS to show distances…</Text>}
+            {pois.map((p) => {
+              const dd = distDir(p.pt);
+              return (
+                <View key={p.key} style={styles.navItem} testID={`nav-${p.key}`}>
+                  <Ionicons name={p.icon} size={18} color={colors.green} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.navLabel}>{p.label}</Text>
+                    <Text style={styles.navSub}>{dd ? `${fmtDist(dd.d, unit)} ${unitLabel(unit).toLowerCase()} · ${dd.dir}` : "—"}</Text>
+                  </View>
+                  <Pressable style={styles.showBtn} onPress={() => { setFocus({ key: Date.now(), point: p.pt }); setNavOpen(false); }} testID={`nav-show-${p.key}`}>
+                    <Text style={styles.showTxt}>SHOW</Text>
+                  </Pressable>
+                </View>
+              );
+            })}
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       {/* Hole popup */}
       <Modal visible={sel != null} transparent animationType="fade" onRequestClose={() => setSel(null)}>
@@ -109,7 +178,7 @@ export default function CourseOverview() {
                   <Pressable style={styles.pBtn2} onPress={() => goHole(selHole.holeNumber)} testID="overview-navigate-tee-btn">
                     <Text style={styles.pBtn2Txt}>NAVIGATE TO TEE</Text>
                   </Pressable>
-                  <Pressable style={styles.pBtn2} onPress={() => goHole(selHole.holeNumber)} testID="overview-view-green-btn">
+                  <Pressable style={styles.pBtn2} onPress={() => goHole(selHole.holeNumber, "green")} testID="overview-view-green-btn">
                     <Text style={styles.pBtn2Txt}>VIEW GREEN</Text>
                   </Pressable>
                 </View>
@@ -141,4 +210,16 @@ const styles = StyleSheet.create({
   pBtnTxt: { color: "#fff", fontWeight: "900", letterSpacing: 1 },
   pBtn2: { flex: 1, height: 46, borderRadius: 12, backgroundColor: colors.zinc100, alignItems: "center", justifyContent: "center" },
   pBtn2Txt: { color: colors.charcoal, fontWeight: "900", fontSize: 11, letterSpacing: 0.5 },
+  actionRow: { flexDirection: "row", gap: 10, marginBottom: 10 },
+  secBtn: { flex: 1, height: 46, borderRadius: 14, backgroundColor: "#fff", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, shadowColor: "#000", shadowOpacity: 0.15, shadowRadius: 5, elevation: 3 },
+  secTxt: { color: colors.charcoal, fontWeight: "900", letterSpacing: 1, fontSize: 12 },
+  grid: { flexDirection: "row", flexWrap: "wrap", gap: 8, justifyContent: "center" },
+  gridCell: { width: 52, height: 52, borderRadius: 12, backgroundColor: colors.zinc100, alignItems: "center", justifyContent: "center" },
+  gridNum: { fontSize: 16, fontWeight: "900", color: colors.charcoal },
+  gridPar: { fontSize: 9, fontWeight: "800", color: colors.zinc500 },
+  navItem: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: colors.zinc100 },
+  navLabel: { fontSize: 14, fontWeight: "800", color: colors.charcoal },
+  navSub: { fontSize: 12, fontWeight: "700", color: colors.zinc500, marginTop: 1 },
+  showBtn: { paddingHorizontal: 14, height: 34, borderRadius: 10, backgroundColor: colors.green, alignItems: "center", justifyContent: "center" },
+  showTxt: { color: "#fff", fontWeight: "900", fontSize: 11, letterSpacing: 0.5 },
 });

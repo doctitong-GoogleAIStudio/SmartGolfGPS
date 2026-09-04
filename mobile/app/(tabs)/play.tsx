@@ -62,6 +62,10 @@ export default function Rangefinder() {
   const [puttDraft, setPuttDraft] = useState(2);
   const [flyoverKey, setFlyoverKey] = useState(0);
   const [arcsOn, setArcsOn] = useState(false);
+  const [pins, setPins] = useState<Record<string, LatLng>>({});
+  const pinsRef = useRef<Record<string, LatLng>>({});
+  const [pendingGreen, setPendingGreen] = useState(false);
+  const [greenFocus, setGreenFocus] = useState<{ key: number; point: LatLng } | null>(null);
 
   const nearGreenRef = useRef(false);
   const puttDismissedRef = useRef<Set<number>>(new Set());
@@ -98,8 +102,18 @@ export default function Rangefinder() {
           if (cid) {
             const c = await cachedGet(`/courses/${cid}`, `course_${cid}`);
             const sh = await storage.getItem<string>("sg_start_hole", "");
+            const focus = await storage.getItem<string>("sg_focus", "");
             if (sh) storage.removeItem("sg_start_hole");
-            if (alive) { setCourse(c); setHoleIdx(sh ? Number(sh) - 1 : (a?.currentHole || 1) - 1); }
+            if (focus) storage.removeItem("sg_focus");
+            const pinsRaw = await storage.getItem<string>(`sg_pins_${cid}`, "");
+            const loadedPins = pinsRaw ? JSON.parse(pinsRaw) : {};
+            pinsRef.current = loadedPins;
+            if (alive) {
+              setPins(loadedPins);
+              setCourse(c);
+              setHoleIdx(sh ? Number(sh) - 1 : (a?.currentHole || 1) - 1);
+              if (focus === "green") setPendingGreen(true);
+            }
           } else {
             const cs = await cachedGet<any[]>("/courses", "courses");
             if (alive && cs[0]) setCourse(cs[0]);
@@ -118,11 +132,30 @@ export default function Rangefinder() {
     if (!ball && !gpsPos && hole?.tee) { setBall(hole.tee); setBallSource("manual"); }
   }, [hole, ball, gpsPos]);
 
-  // Default target: green center on hole change + trigger the hole flyover.
+  // Default target: saved pin or green center on hole change; trigger hole flyover / green focus.
   useEffect(() => {
-    if (hole?.greenCenter) { setTarget(hole.greenCenter); setTargetLabel("CENTER"); }
-    if (hole?.tee && hole?.greenCenter) setFlyoverKey((k) => k + 1);
-  }, [holeIdx, course]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (!hole) return;
+    const hn = String(hole.holeNumber);
+    const savedPin = pinsRef.current[hn];
+    if (savedPin) { setTarget(savedPin); setTargetLabel("PIN"); }
+    else if (hole.greenCenter) { setTarget(hole.greenCenter); setTargetLabel("CENTER"); }
+    if (pendingGreen) {
+      const pt = savedPin || hole.greenCenter;
+      if (pt) { setTarget(pt); setTargetLabel("PIN"); setGreenFocus({ key: Date.now(), point: pt }); }
+      setPendingGreen(false);
+    } else if (hole.tee && hole.greenCenter) {
+      setFlyoverKey((k) => k + 1);
+    }
+  }, [holeIdx, course, pendingGreen]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const savePin = (pos: LatLng) => {
+    if (!hole || !course) return;
+    const hn = String(hole.holeNumber);
+    const next = { ...pinsRef.current, [hn]: pos };
+    pinsRef.current = next;
+    setPins(next);
+    storage.setItem(`sg_pins_${course.id}`, JSON.stringify(next));
+  };
 
   // Background tracking lifecycle for an active round.
   useEffect(() => {
@@ -448,7 +481,7 @@ export default function Rangefinder() {
         gpsPos={gpsPos}
         gpsHeading={heading}
         target={target}
-        onTargetDrag={(p) => { setTarget(p); setTargetLabel("CUSTOM"); }}
+        onTargetDrag={(p) => { setTarget(p); if (targetLabel === "PIN") savePin(p); else setTargetLabel("CUSTOM"); }}
         tee={hole?.tee}
         greens={hole}
         hazards={hole?.hazards || []}
@@ -460,6 +493,8 @@ export default function Rangefinder() {
         gpsPath={activeRound ? gpsPath : []}
         distanceArcs={arcsOn}
         arcUnit={unit}
+        focusKey={greenFocus?.key}
+        focusTarget={greenFocus?.point}
         flyover={hole?.tee && hole?.greenCenter ? { from: hole.tee, to: hole.greenCenter } : null}
         flyoverKey={flyoverKey}
       />

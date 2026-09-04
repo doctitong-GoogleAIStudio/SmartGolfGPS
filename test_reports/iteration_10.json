@@ -1,0 +1,33 @@
+{
+  "summary": "Iteration 10 – Phase 3 mobile additions (green focus, course navigation sheet, hole selector grid) + backend POI seed. Backend: 14/14 pytest tests pass including new test_demo_course_has_pois validating clubhouse/drivingRange/practiceGreen/parking on demo-apo-davao (all with valid lat/lng). Mobile UI (Expo web preview @ mobile viewport 390x844): (1) /start-round → /course-overview shows header 'Apo Highlands Demo (DEMO DATA) · 18 HOLES · PAR 72 · 6562 YD'. (2) overview-holes-btn opens overview-hole-grid; tapping grid-hole-9 navigates to /play with rangefinder-screen mounted and HOLE 9 header (CENTER 383 YD visible). (3) overview-navigate-btn opens overview-nav-sheet with all 5 rows (nav-tee, nav-club, nav-range, nav-pgreen, nav-park); each row shows '—' distance (GPS DENIED on web is expected). nav-show-club closes the sheet cleanly and overview screen remains mounted, no crash. (4) VIEW GREEN behavior verified via storage-seeded /play navigation with sg_focus='green' — rangefinder-screen mounts, no crash (green focus + draggable pin is native-only per spec). (5) Regression: /play still exposes dist-arcs-btn, rf-overview-btn, HOLE header, F/C/B distances (367/383/398 yd on hole 9). Zero non-favicon console errors across the full flow (start-round → overview → grid → play → back → nav sheet → play).",
+  "platforms_tested": ["mobile"],
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "mobile": {
+      "ui_bugs": [],
+      "integration_issues": [],
+      "design_issues": [],
+      "react_native_issues": []
+    }
+  },
+  "parity_issues": [],
+  "test_report_links": [
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "course-overview.tsx: overview-view-hole-btn and overview-navigate-tee-btn both call goHole(n) with no focusMode while overview-view-green-btn calls goHole(n,'green') — that is the intended distinction for Phase 3, resolved from iteration_9 comment.",
+    "course-overview.tsx line 82: focusKey uses Date.now() as a numeric key which is fine, but the setFocus is only cleared when unmounting — repeated SHOW taps keep pushing new focus keys and never GC. Not a bug, just note.",
+    "The nav sheet shows '—' distance when GPS is unavailable (line 143) which is correct; label text still reads e.g. '— yd · N' would be confusing but current code renders single '—' — good.",
+    "Backend Course model now includes clubhouse/drivingRange/practiceGreen/parking as Optional[LatLng] — serialized correctly, and build_demo_course seeds all four via _ll(dest(...)). Verified via API."
+  ],
+  "updated_files": [
+    "/app/backend/tests/backend_test.py"
+  ],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "seed_data_creation": "None. Used seeded demo-apo-davao course + storage-seeded sg_focus/sg_start_hole to simulate VIEW GREEN.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "All Phase 3 mobile testIDs verified: overview-holes-btn, overview-hole-grid, grid-hole-{1..18}, overview-navigate-btn, overview-nav-sheet, nav-tee/club/range/pgreen/park, nav-show-{key}, overview-view-green-btn. On web preview, VIEW GREEN cannot be triggered from the hole popup because the popup opens on native map marker press (CourseOverviewMap.web is a placeholder). Simulate by seeding localStorage sg_focus='green' + sg_start_hole then navigating to /play. GPS is DENIED on web so nav rows show '—'. Backend POIs verified via test_demo_course_has_pois."
+}

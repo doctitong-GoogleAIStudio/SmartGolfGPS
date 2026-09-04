@@ -2,7 +2,7 @@ import React from "react";
 import { View, Text, StyleSheet } from "react-native";
 
 // Web stub — the full-course satellite overview renders on the mobile app.
-export function CourseOverviewMap({ style }: { holes?: any; onHolePress?: any; gpsPos?: any; style?: any }) {
+export function CourseOverviewMap({ style }: { holes?: any; onHolePress?: any; gpsPos?: any; pois?: any; focusKey?: any; focusTarget?: any; style?: any }) {
   return (
     <View style={[StyleSheet.absoluteFill, styles.wrap, style]} testID="course-overview-map">
       <Text style={styles.t}>Course overview</Text>

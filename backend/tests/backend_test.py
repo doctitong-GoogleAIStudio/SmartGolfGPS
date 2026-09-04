@@ -43,6 +43,19 @@ class TestCourses:
         # at least one hazard exists on par 4/5 holes
         assert any(h["hazards"] for h in demo["holes"])
 
+    def test_demo_course_has_pois(self, s):
+        """Phase 1 addition: clubhouse/drivingRange/practiceGreen/parking seeded on demo course."""
+        r = s.get(f"{API}/courses/demo-apo-davao", timeout=15)
+        assert r.status_code == 200
+        demo = r.json()
+        for k in ("clubhouse", "drivingRange", "practiceGreen", "parking"):
+            assert k in demo, f"POI {k} missing from demo course"
+            assert demo[k] is not None, f"POI {k} is null"
+            assert "lat" in demo[k] and "lng" in demo[k], f"POI {k} missing lat/lng"
+            assert isinstance(demo[k]["lat"], (int, float))
+            assert isinstance(demo[k]["lng"], (int, float))
+        assert len(demo["holes"]) == 18
+
     def test_course_crud(self, s):
         payload = {"name": "TEST_Course_X", "location": "Nowhere", "latitude": 1.0, "longitude": 2.0, "holeCount": 9}
         r = s.post(f"{API}/courses", json=payload)

@@ -13,8 +13,9 @@ const MAP_STYLE: any = {
 };
 
 type Hole = { holeNumber: number; par: number; tee?: LatLng | null; greenCenter?: LatLng | null };
+type Poi = { key: string; label: string; pt: LatLng; icon?: string };
 
-export function CourseOverviewMap({ holes, onHolePress, gpsPos, style }: { holes: Hole[]; onHolePress: (i: number) => void; gpsPos?: LatLng | null; style?: any }) {
+export function CourseOverviewMap({ holes, onHolePress, gpsPos, pois = [], focusKey = 0, focusTarget = null, style }: { holes: Hole[]; onHolePress: (i: number) => void; gpsPos?: LatLng | null; pois?: Poi[]; focusKey?: number; focusTarget?: LatLng | null; style?: any }) {
   const cameraRef = useRef<CameraRef>(null);
 
   const pts = useMemo(() => {
@@ -40,6 +41,11 @@ export function CourseOverviewMap({ holes, onHolePress, gpsPos, style }: { holes
       { padding: { top: 90, right: 60, bottom: 140, left: 60 }, duration: 0 },
     );
   };
+
+  React.useEffect(() => {
+    if (focusKey > 0 && focusTarget) cameraRef.current?.easeTo({ center: [focusTarget.lng, focusTarget.lat], zoom: 17, duration: 700 });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusKey]);
 
   return (
     <Map style={[StyleSheet.absoluteFill, style]} mapStyle={MAP_STYLE} compass={false} logo={false} attribution={false} onDidFinishLoadingMap={fit} testID="course-overview-map">
@@ -79,6 +85,14 @@ export function CourseOverviewMap({ holes, onHolePress, gpsPos, style }: { holes
         </React.Fragment>
       ))}
 
+      {pois.map((p) => (
+        <Marker key={p.key} lngLat={[p.pt.lng, p.pt.lat]} anchor="center">
+          <View style={styles.poi}>
+            <Text style={styles.poiTxt}>{p.label}</Text>
+          </View>
+        </Marker>
+      ))}
+
       {gpsPos && (
         <Marker lngLat={[gpsPos.lng, gpsPos.lat]} anchor="center">
           <View style={styles.gpsWrap}><View style={styles.gpsDot} /></View>
@@ -107,4 +121,6 @@ const styles = StyleSheet.create({
   flagCloth: { position: "absolute", left: 5, top: 1, width: 0, height: 0, borderTopWidth: 5, borderBottomWidth: 5, borderLeftWidth: 12, borderTopColor: "transparent", borderBottomColor: "transparent", borderLeftColor: colors.red },
   gpsWrap: { width: 26, height: 26, borderRadius: 13, backgroundColor: "rgba(14,165,233,0.25)", alignItems: "center", justifyContent: "center" },
   gpsDot: { width: 16, height: 16, borderRadius: 8, backgroundColor: colors.water, borderWidth: 3, borderColor: "#fff" },
+  poi: { backgroundColor: "rgba(17,24,39,0.8)", borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3, borderWidth: 1, borderColor: colors.gold },
+  poiTxt: { color: colors.gold, fontSize: 10, fontWeight: "900", letterSpacing: 0.3 },
 });

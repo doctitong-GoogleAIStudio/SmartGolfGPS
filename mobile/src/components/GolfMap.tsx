@@ -41,6 +41,9 @@ type Props = {
   shotLines?: ShotLine[];
   distanceArcs?: boolean;
   arcUnit?: string;
+  focusKey?: number;
+  focusTarget?: LatLng | null;
+  focusZoom?: number;
   flyover?: { from: LatLng; to: LatLng } | null;
   flyoverKey?: number;
   style?: any;
@@ -107,6 +110,9 @@ export function GolfMap({
   shotLines = [],
   distanceArcs = false,
   arcUnit = "yd",
+  focusKey = 0,
+  focusTarget = null,
+  focusZoom = 18.5,
   flyover = null,
   flyoverKey = 0,
   style,
@@ -142,6 +148,11 @@ export function GolfMap({
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [flyoverKey]);
+
+  useEffect(() => {
+    if (focusKey > 0 && focusTarget) cameraRef.current?.easeTo({ center: [focusTarget.lng, focusTarget.lat], zoom: focusZoom, duration: 700 });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusKey]);
 
   const shotFeatures: GeoJSON.FeatureCollection = {
     type: "FeatureCollection",
