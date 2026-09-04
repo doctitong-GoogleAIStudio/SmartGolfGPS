@@ -26,13 +26,9 @@ export async function listOfflineCourseIds(): Promise<string[]> {
 export async function downloadCourseTiles(
   courseId: string,
   name: string,
-  lat: number,
-  lng: number,
+  bounds: [number, number, number, number],
   onProgress?: (pct: number) => void,
 ): Promise<void> {
-  // ~2.2 km box around the course, streets->green zoom range.
-  const d = 0.02;
-  const bounds: [number, number, number, number] = [lng - d, lat - d, lng + d, lat + d];
   await new Promise<void>((resolve, reject) => {
     OfflineManager.createPack(
       { mapStyle: OFFLINE_STYLE, bounds, minZoom: 12, maxZoom: 17, metadata: { courseId, name } },

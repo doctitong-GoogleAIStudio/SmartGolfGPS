@@ -1,0 +1,26 @@
+{
+  "summary": "Frontend-only regression sweep on the Expo web preview after Smart Offline Area + Download All changes to /app/mobile/app/courses/index.tsx. All 5 requested items PASS. /courses still loads and lists 3 courses with NEW COURSE / IMPORT / BROWSE PHILIPPINE COURSES and per-card PLAY / EDIT / SHARE / DELETE testIDs intact. SAVE ALL OFFLINE button and per-card DOWNLOAD OFFLINE MAP row are correctly HIDDEN on web (offlineSupported=false via offline.web.ts) — this is expected, not flagged. / , /courses, /play, /ph-courses all mount with no JS/console errors and no white screen. /play still mounts the MapLibre web stub ('Satellite map · Live map renders on the mobile app') without crash. /ph-courses region-count chips render correctly (All 98, Metro Manila 10, Cavite/Laguna 14, Rizal 6, Tagaytay 4, Batangas 5, Central Luzon 13, Northern Luzon 10, Bicol 2, Visayas 15, Mindanao 18, Palawan 1) and the ph-recent-section code path is intact (conditional on prior PH-add history, correctly hidden when recent[] is empty). Only console output is pre-existing React-Native-Web deprecation warnings (shadow*/textShadow*/pointerEvents) — non-blocking, not introduced by this change.",
+  "platforms_tested": ["mobile"],
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "mobile": {
+      "ui_bugs": [],
+      "integration_issues": [],
+      "design_issues": [],
+      "react_native_issues": []
+    }
+  },
+  "parity_issues": [],
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "boundsForCourse fallback uses lat/lng from the course-list summary (c.latitude, c.longitude); if the summary payload omits these the fallback bounds become NaN. Not observed in this run (summary has coords), but worth a guard before calling MapLibre downloadPack in production."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (skipped)", "frontend": "100% (5/5 regression items pass)"},
+  "seed_data_creation": "None",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Smart Golf GPS is an Expo mobile-first app. Offline-tile features (downloadCourseTiles, listOfflineCourseIds, SAVE ALL OFFLINE button, per-card DOWNLOAD OFFLINE MAP row) are NATIVE-ONLY and are intentionally hidden on the Expo web preview because offline.web.ts sets offlineSupported=false. On the web preview the /play screen renders the MapLibre stub 'Satellite map · Live map renders on the mobile app' — this is expected. DO NOT flag any of these as bugs. Test data present: 3 courses (Apo Highlands Demo, Southpacific Golf and Leisure, Manila Golf & Country Club). /ph-courses recently-added strip is conditional on recent[]>0 && !query && !regionFilter — expected to be empty on a fresh preview.",
+  "rca of the issue": ""
+}

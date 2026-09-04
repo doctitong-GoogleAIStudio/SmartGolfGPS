@@ -101,6 +101,12 @@ iteration_3 (mobile enhancements): 4/4 PASS (GCash QR, Weather On Card, Voice Ca
 
 ## Notes for next agent
 
+### Smart Offline Area + Download All (2026-06) [native-only]
+- Smart Offline Area: offline download now sizes tile bounds to the course's actual mapped holes. courses/index.tsx boundsForCourse(course, lat, lng) unions all tee/green/hazard coords (padded ~15%) from GET /api/courses/{id}; falls back to a ~2.2km box (with NaN guard) when the course has no holes. downloadCourseTiles now takes explicit bounds: (courseId, name, bounds, onProgress).
+- Download All: "SAVE ALL COURSES OFFLINE (n)" button on Courses screen downloads every not-yet-offline course sequentially (shared runDownload helper), per-card progress + final summary toast; hidden when all courses already offline. bulkBusy blocks single taps while running.
+- Native-only (hidden on web via offline.web.ts). Web regression passed 7/7 (iteration_7.json). Verify tile download on a device build.
+- Backlog: disk-quota preflight + cancel in-flight download (still not done). Open iteration_4 bug: Play.tsx roundScores staleness.
+
 ### Drag The Pin + Offline Tiles (2026-06) [native-only]
 - Drag The Pin: GolfMap.tsx target flag is now draggable (DraggableFlag: PanResponder translates the flag while dragging, then mapRef.project→unproject converts the release pixel to lng/lat and calls onTargetDrag). Tap-on-map still moves the target too.
 - Offline Tiles: My Courses cards (app/courses/index.tsx) have a DOWNLOAD OFFLINE MAP row → MapLibre OfflineManager pre-downloads Esri satellite tiles (~2.2km box, zoom 12–17) with live %, a "ready · tap to remove" state, and delete. Native logic in src/lib/offline.ts; src/lib/offline.web.ts stub keeps it a no-op/hidden on web (offlineSupported=false). Download uses a single resolve/reject promise channel (no double-toast); guarded against mid-download re-tap and unmount setState.

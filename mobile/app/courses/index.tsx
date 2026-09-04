@@ -12,6 +12,33 @@ import { ScreenHeader } from "@/src/components/ui";
 import { toast } from "@/src/lib/toast";
 import { offlineSupported, listOfflineCourseIds, downloadCourseTiles, deleteCourseTiles } from "@/src/lib/offline";
 
+type Pt = { lat: number; lng: number };
+
+// Bounds tight to a course's mapped holes (tees, greens, hazards), padded ~15%.
+// Falls back to a ~2.2 km box around the course centroid when it has no holes.
+function boundsForCourse(course: any, fallbackLat: number, fallbackLng: number): [number, number, number, number] {
+  const pts: Pt[] = [];
+  (course?.holes || []).forEach((h: any) => {
+    [h.tee, h.greenFront, h.greenCenter, h.greenBack].forEach((p: Pt) => {
+      if (p && p.lat != null && p.lng != null) pts.push(p);
+    });
+    (h.hazards || []).forEach((hz: any) => {
+      if (hz && hz.lat != null && hz.lng != null) pts.push({ lat: hz.lat, lng: hz.lng });
+    });
+  });
+  if (pts.length < 2) {
+    const d = 0.02;
+    const flat = Number.isFinite(fallbackLat) ? fallbackLat : 12.6;
+    const flng = Number.isFinite(fallbackLng) ? fallbackLng : 122.0;
+    return [flng - d, flat - d, flng + d, flat + d];
+  }
+  let w = Infinity, s = Infinity, e = -Infinity, n = -Infinity;
+  pts.forEach((p) => { w = Math.min(w, p.lng); e = Math.max(e, p.lng); s = Math.min(s, p.lat); n = Math.max(n, p.lat); });
+  const padLat = (n - s) * 0.15 + 0.002;
+  const padLng = (e - w) * 0.15 + 0.002;
+  return [w - padLng, s - padLat, e + padLng, n + padLat];
+}
+
 export default function Courses() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -22,6 +49,7 @@ export default function Courses() {
   const [importCode, setImportCode] = useState("");
   const [offlineIds, setOfflineIds] = useState<Set<string>>(new Set());
   const [dlProgress, setDlProgress] = useState<Record<string, number>>({});
+  const [bulkBusy, setBulkBusy] = useState(false);
   const mountedRef = React.useRef(true);
 
   const load = () => cachedGet<any[]>("/courses", "courses").then(setCourses).catch(() => {});
@@ -32,9 +60,22 @@ export default function Courses() {
     return () => { mountedRef.current = false; };
   }, []));
 
+  const runDownload = async (c: any) => {
+    let course = c;
+    try { course = await api.get(`/courses/${c.id}`); } catch { /* fall back to summary */ }
+    const bounds = boundsForCourse(course, c.latitude, c.longitude);
+    setDlProgress((prev) => ({ ...prev, [c.id]: 0 }));
+    await downloadCourseTiles(c.id, c.name, bounds, (pct) => {
+      if (mountedRef.current) setDlProgress((prev) => ({ ...prev, [c.id]: pct }));
+    });
+    if (!mountedRef.current) return;
+    setOfflineIds((s) => new Set(s).add(c.id));
+    setDlProgress((prev) => { const n = { ...prev }; delete n[c.id]; return n; });
+  };
+
   const toggleOffline = async (c: any) => {
     const p = dlProgress[c.id];
-    if (p != null && p >= 0 && p < 100) { toast.info("Download in progress", "Hang tight — tiles are still saving."); return; }
+    if (bulkBusy || (p != null && p >= 0 && p < 100)) { toast.info("Download in progress", "Hang tight — tiles are still saving."); return; }
     if (offlineIds.has(c.id)) {
       Alert.alert("Remove offline map?", `Delete the downloaded satellite tiles for "${c.name}"?`, [
         { text: "Cancel", style: "cancel" },
@@ -46,19 +87,34 @@ export default function Courses() {
       ]);
       return;
     }
-    setDlProgress((prev) => ({ ...prev, [c.id]: 0 }));
     try {
-      await downloadCourseTiles(c.id, c.name, c.latitude, c.longitude, (pct) => {
-        if (mountedRef.current) setDlProgress((prev) => ({ ...prev, [c.id]: pct }));
-      });
-      if (!mountedRef.current) return;
-      setOfflineIds((s) => new Set(s).add(c.id));
-      setDlProgress((prev) => { const n = { ...prev }; delete n[c.id]; return n; });
-      toast.success(`"${c.name}" saved for offline play`);
+      await runDownload(c);
+      if (mountedRef.current) toast.success(`"${c.name}" saved for offline play`);
     } catch (e: any) {
       if (!mountedRef.current) return;
       setDlProgress((prev) => { const n = { ...prev }; delete n[c.id]; return n; });
       toast.error(e?.message || "Could not download offline map");
+    }
+  };
+
+  const downloadAll = async () => {
+    if (bulkBusy) return;
+    const todo = courses.filter((c) => !offlineIds.has(c.id));
+    if (!todo.length) { toast.info("All caught up", "Every course is already saved offline."); return; }
+    setBulkBusy(true);
+    let done = 0;
+    for (const c of todo) {
+      if (!mountedRef.current) break;
+      try {
+        await runDownload(c);
+        done++;
+      } catch {
+        setDlProgress((prev) => { const n = { ...prev }; delete n[c.id]; return n; });
+      }
+    }
+    if (mountedRef.current) {
+      setBulkBusy(false);
+      toast.success(`Saved ${done} course${done === 1 ? "" : "s"} offline`, done < todo.length ? "Some downloads failed — tap a card to retry." : undefined);
     }
   };
 
@@ -129,6 +185,14 @@ export default function Courses() {
           <Text style={styles.phBtnTxt}>BROWSE PHILIPPINE COURSES</Text>
           <Ionicons name="chevron-forward" size={16} color="rgba(255,255,255,0.5)" />
         </Pressable>
+        {offlineSupported && courses.length > 0 && courses.some((c) => !offlineIds.has(c.id)) && (
+          <Pressable style={styles.saveAllBtn} onPress={downloadAll} disabled={bulkBusy} testID="download-all-offline-btn">
+            <Ionicons name={bulkBusy ? "cloud-download" : "cloud-download-outline"} size={18} color={colors.green} />
+            <Text style={styles.saveAllTxt}>
+              {bulkBusy ? "SAVING ALL COURSES OFFLINE…" : `SAVE ALL COURSES OFFLINE (${courses.filter((c) => !offlineIds.has(c.id)).length})`}
+            </Text>
+          </Pressable>
+        )}
         {courses.map((c) => (
           <View key={c.id} style={styles.card} testID={`course-card-${c.id}`}>
             <Text style={[styles.cName, { fontFamily: font.headBold }]}>{c.name}</Text>
@@ -220,6 +284,8 @@ const styles = StyleSheet.create({
   importBtnTxt: { color: colors.green, fontWeight: "900", letterSpacing: 1.5 },
   phBtn: { height: 52, borderRadius: 16, backgroundColor: colors.charcoal, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, paddingHorizontal: 16 },
   phBtnTxt: { color: "#fff", fontWeight: "900", letterSpacing: 1, fontSize: 13 },
+  saveAllBtn: { height: 48, borderRadius: 14, backgroundColor: "rgba(20,83,45,0.08)", borderWidth: 1, borderColor: colors.green, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
+  saveAllTxt: { color: colors.green, fontWeight: "900", letterSpacing: 0.5, fontSize: 12 },
   importHint: { fontSize: 13, color: colors.zinc500, fontWeight: "600", lineHeight: 19, marginTop: -4 },
   card: { backgroundColor: "#fff", borderWidth: 1, borderColor: colors.zinc200, borderRadius: 18, padding: 16 },
   cName: { fontWeight: "800", fontSize: 15, color: colors.charcoal },
