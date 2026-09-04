@@ -1,6 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import * as Location from "expo-location";
 import { haversineMeters, bearingDeg, LatLng } from "@/src/lib/geo";
+import { useSettings } from "@/src/context/SettingsContext";
+
+const GPS_MODES: Record<string, { accuracy: Location.LocationAccuracy; timeInterval: number; distanceInterval: number }> = {
+  high: { accuracy: Location.Accuracy.BestForNavigation, timeInterval: 1000, distanceInterval: 1 },
+  balanced: { accuracy: Location.Accuracy.High, timeInterval: 3000, distanceInterval: 5 },
+  saver: { accuracy: Location.Accuracy.Balanced, timeInterval: 8000, distanceInterval: 15 },
+};
 
 export type GpsError = "denied" | "unavailable" | null;
 
@@ -16,6 +23,8 @@ export type GpsState = {
 };
 
 export function useGPS(enabled = true): GpsState {
+  const { settings } = useSettings();
+  const gpsMode = settings.gpsMode || "high";
   const [pos, setPos] = useState<LatLng | null>(null);
   const [accuracy, setAccuracy] = useState<number | null>(null);
   const [speed, setSpeed] = useState<number | null>(null);
@@ -61,7 +70,7 @@ export function useGPS(enabled = true): GpsState {
       setError(null);
 
       subRef.current = await Location.watchPositionAsync(
-        { accuracy: Location.Accuracy.BestForNavigation, timeInterval: 1000, distanceInterval: 1 },
+        GPS_MODES[gpsMode] || GPS_MODES.high,
         (p) => {
           const acc = p.coords.accuracy ?? 20;
           setAccuracy(acc);
@@ -94,7 +103,7 @@ export function useGPS(enabled = true): GpsState {
       subRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled, permTick]);
+  }, [enabled, permTick, gpsMode]);
 
   const quality = accuracy == null ? null : accuracy <= 8 ? "GOOD" : accuracy <= 15 ? "FAIR" : "POOR";
   return { pos, accuracy, quality, error, speed, heading, canAskAgain, requestAgain };

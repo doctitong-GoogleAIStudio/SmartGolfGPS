@@ -12,6 +12,7 @@ export type Settings = {
   aiCaddie: boolean;
   tournamentMode: boolean;
   gpsTracking: boolean;
+  gpsMode: string;
 };
 
 const DEFAULTS: Settings = {
@@ -24,6 +25,7 @@ const DEFAULTS: Settings = {
   aiCaddie: true,
   tournamentMode: false,
   gpsTracking: true,
+  gpsMode: "high",
 };
 
 type Ctx = { settings: Settings; update: (patch: Partial<Settings>) => void };

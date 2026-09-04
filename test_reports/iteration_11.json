@@ -1,0 +1,30 @@
+{
+  "summary": "Iteration 11 – Mobile frontend validation of the three new additions (Admin POI Editor, Hazard Panel, GPS Power Modes) on the Expo web preview (viewport 390x844). ALL PASS with zero non-favicon console errors. (A) /more GPS Mode: setting-gps-mode-high/balanced/saver all render; toggling through BALANCED → SAVER → HIGH persists to localStorage (sgc_settings.gpsMode) and the app does not crash; GPS still initializes after each switch (Segment component re-renders useGPS via gpsMode dep). (B) Course Editor (/courses → course-edit-demo-apo-davao): editor-poi-clubhouse, editor-poi-drivingRange, editor-poi-practiceGreen, editor-poi-parking all render; selecting each mode sets state correctly; editor-save-btn present, tap → PUT /api/courses/{id} succeeds, editor screen remains mounted, no crash (map-tap POI placement is native-only per spec). (C) Hazard Panel on /play: HOLE 1 of demo-apo-davao has hazards, hazard-panel-btn appears with warning icon; tap → hazard-panel opens showing row 'Greenside Bunker · Front 323 · Carry 344 yd' (both distances rendered correctly from ball, unit yd); tap again → panel closes. rangefinder-screen remains mounted throughout. (D) Regression /play: rf-hole-label, fcb-front/center/back, dist-arcs-btn, rf-overview-btn all present. (E) Navigation regression: /course-overview, /courses, /more (more-screen testID confirmed), /start-round all navigate cleanly with content rendered.",
+  "platforms_tested": ["mobile"],
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "mobile": {
+      "ui_bugs": [],
+      "integration_issues": [],
+      "design_issues": [],
+      "react_native_issues": []
+    }
+  },
+  "parity_issues": [],
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "useGPS.ts line 106: gpsMode is in dep array so watchPositionAsync is torn down and re-created on mode change — correct behavior. Cleanup via subRef.remove() is fine.",
+    "play.tsx line 663: hazard-panel-btn is conditionally rendered only when (hole?.hazards?.length || 0) > 0 — matches spec. Panel body at line 503 also guards on the same condition, so toggling on a hazard-less hole is impossible.",
+    "edit.tsx line 65: POI placement writes course[mode] = {lat,lng} directly on the course object (course-level, not per-hole) — matches Course model. POI_KEYS check prevents collision with hole-level modes (tee/greenFront/etc).",
+    "edit.tsx line 147: POI buttons show ✓ via `course[k] && styles.modeDone` — visual feedback works once a POI is set.",
+    "Hazard row testID uses hazard.id (uuid) which is stable — good. Front/Carry distances computed from ball || gpsPos, matching spec 'from the ball or GPS'."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (skipped per request)", "frontend": "100%"},
+  "seed_data_creation": "None. Used seeded demo-apo-davao course; HOLE 1 already has a Greenside Bunker hazard from prior editor sessions.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Testable features on web preview: (1) setting-gps-mode-{high|balanced|saver} on /more, verify via localStorage sgc_settings.gpsMode; (2) editor-poi-{clubhouse|drivingRange|practiceGreen|parking} + editor-save-btn on /courses/{id}/edit — placing markers by tapping map is native-only (GolfMap.web is a stub); (3) hazard-panel-btn + hazard-panel + hazard-row-{id} on /play, only visible on holes with hazards. Cycle via rf-next-hole-btn. GPS is DENIED on web preview which is expected; hazard distances still compute from ball fallback (hole.tee).",
+  "rca of the issue": ""
+}

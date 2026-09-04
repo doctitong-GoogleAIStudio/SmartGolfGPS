@@ -44,6 +44,7 @@ type Props = {
   focusKey?: number;
   focusTarget?: LatLng | null;
   focusZoom?: number;
+  pois?: { key: string; label: string; pt: LatLng }[];
   flyover?: { from: LatLng; to: LatLng } | null;
   flyoverKey?: number;
   style?: any;
@@ -113,6 +114,7 @@ export function GolfMap({
   focusKey = 0,
   focusTarget = null,
   focusZoom = 18.5,
+  pois = [],
   flyover = null,
   flyoverKey = 0,
   style,
@@ -235,6 +237,12 @@ export function GolfMap({
         </Marker>
       )}
 
+      {pois.map((p) => (
+        <Marker key={p.key} lngLat={[p.pt.lng, p.pt.lat]} anchor="center">
+          <View style={styles.poiMk}><Text style={styles.poiMkTxt}>{p.label}</Text></View>
+        </Marker>
+      ))}
+
       {gpsPos && (
         <Marker lngLat={[gpsPos.lng, gpsPos.lat]} anchor="center">
           <View style={styles.gpsWrap}>
@@ -345,6 +353,8 @@ const styles = StyleSheet.create({
   distLabelTxt: { color: "#fff", fontSize: 12, fontWeight: "800" },
   arcLabel: { backgroundColor: "rgba(0,0,0,0.55)", borderRadius: 6, paddingHorizontal: 5, paddingVertical: 1 },
   arcLabelTxt: { color: "#fff", fontSize: 10, fontWeight: "800" },
+  poiMk: { backgroundColor: "rgba(17,24,39,0.8)", borderRadius: 8, paddingHorizontal: 7, paddingVertical: 2, borderWidth: 1, borderColor: colors.gold },
+  poiMkTxt: { color: colors.gold, fontSize: 9, fontWeight: "900", letterSpacing: 0.3 },
   ballMk: { width: 16, height: 16, borderRadius: 8, backgroundColor: "#fff", borderWidth: 3, borderColor: colors.fairway },
   gpsWrap: { width: 44, height: 44, alignItems: "center", justifyContent: "center" },
   gpsArrow: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, alignItems: "center" },

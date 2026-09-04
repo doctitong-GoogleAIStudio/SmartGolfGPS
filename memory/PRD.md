@@ -101,6 +101,13 @@ iteration_3 (mobile enhancements): 4/4 PASS (GCash QR, Weather On Card, Voice Ca
 
 ## Notes for next agent
 
+### Admin POI Editor + Hazard Panel + GPS Power Modes (2026-06)
+- Admin POI Editor: course editor (courses/[id]/edit.tsx) has POI modes CLUBHOUSE/RANGE/PRACTICE/PARKING (POI_MODES); selecting one + tapping the map sets course.<key>={lat,lng}; shown via GolfMap new `pois` prop (labeled markers); persists on SAVE (PUT /courses/{id}; Course model already has the fields). ✓ shows when placed.
+- Hazard Panel: play.tsx hazard-panel-btn (only when hole has hazards) toggles hazard-panel listing each hazard with Front (origin→lat/lng) + Carry (origin→carryLat/carryLng if present), origin = ball||gpsPos; tapping a row targets it.
+- GPS Power Modes: settings gpsMode High/Balanced/Saver (more.tsx Segment setting-gps-mode). useGPS reads settings.gpsMode and switches expo-location accuracy + time/distance intervals (GPS_MODES), re-subscribing on change.
+- Verified iteration_11 (all pass, 0 console errors). Native-only visuals (POI placement/markers, hazard-from-ball) confirm on device build.
+- REMAINING (spec backlog): admin polygon drawing (fairway/green/bunker/water/OB); advanced analytics/performance trends; turn-by-turn navigate-to-tee.
+
 ### Green Detail + Course Navigation + Hole Selector Grid (2026-06)
 - GREEN DETAIL: overview VIEW GREEN sets sg_focus="green"; play.tsx places a draggable PIN on the green, zooms in (GolfMap focusKey/focusTarget easeTo, focusZoom~18.5), and persists the dragged pin per hole in storage sg_pins_{courseId} (restored on hole/return). onTargetDrag saves when label==="PIN".
 - COURSE NAVIGATION: overview NAVIGATE sheet lists Hole 1 Tee + Clubhouse/DrivingRange/PracticeGreen/Parking with live distance + 8-pt compass (from useGPS) and a SHOW button that recenters CourseOverviewMap (focusKey/focusTarget). Backend Course model gained optional clubhouse/drivingRange/practiceGreen/parking LatLng; demo course seeded with them (seed() now upserts the demo course each startup).

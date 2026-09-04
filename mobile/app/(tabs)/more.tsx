@@ -68,6 +68,7 @@ export default function More() {
 
         <Overline style={styles.sec}>GPS</Overline>
         <Toggle label="GPS Tracking" desc="Live position, navigation & path recording. Disable when not playing." value={settings.gpsTracking !== false} onChange={(v) => update({ gpsTracking: v })} testID="setting-gps-tracking" />
+        <Segment label="GPS Mode" options={[["high", "HIGH"], ["balanced", "BALANCED"], ["saver", "SAVER"]]} value={settings.gpsMode || "high"} onChange={(v) => update({ gpsMode: v })} testID="setting-gps-mode" />
 
         <Overline style={styles.sec}>PLAYS-LIKE ADJUSTMENTS (ESTIMATES)</Overline>
         <Toggle label="Elevation Adjustment" value={settings.elevationAdj} onChange={(v) => update({ elevationAdj: v })} testID="setting-elevation-adj" />

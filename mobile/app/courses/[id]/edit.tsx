@@ -18,6 +18,13 @@ const MODES: [string, string][] = [
   ["greenBack", "SET BACK"],
 ];
 const HAZARD_TYPES = ["BUNKER", "WATER", "TREE", "OUT OF BOUNDS", "DOGLEG", "LAYUP", "OTHER"];
+const POI_MODES: [string, string][] = [
+  ["clubhouse", "CLUBHOUSE"],
+  ["drivingRange", "RANGE"],
+  ["practiceGreen", "PRACTICE"],
+  ["parking", "PARKING"],
+];
+const POI_KEYS = POI_MODES.map((m) => m[0]);
 
 export default function CourseEditor() {
   const router = useRouter();
@@ -54,6 +61,9 @@ export default function CourseEditor() {
       toast.success(`${hazardType} added`);
     } else if (mode === "delete") {
       toast.info("Tap a hazard marker to delete it");
+    } else if (POI_KEYS.includes(mode)) {
+      setCourse({ ...course, [mode]: { lat: p.lat, lng: p.lng } });
+      toast.success(`${POI_MODES.find((m) => m[0] === mode)?.[1]} placed`);
     } else {
       patchHole({ [mode]: { lat: p.lat, lng: p.lng } });
       toast.success(`${MODES.find((m) => m[0] === mode)?.[1] || mode} placed`);
@@ -77,10 +87,11 @@ export default function CourseEditor() {
   };
 
   const center = hole.tee || hole.greenCenter || gpsPos || { lat: course.latitude, lng: course.longitude };
+  const coursePois = POI_MODES.filter(([k]) => course[k]).map(([k, l]) => ({ key: k, label: l, pt: course[k] }));
 
   return (
     <View style={styles.screen} testID="course-editor-screen">
-      <GolfMap center={center} zoom={17} mapType="satellite" onMapPress={onMapPress} tee={hole.tee} greens={hole} hazards={hole.hazards} onHazardPress={onHazardPress} gpsPos={gpsPos} recenterKey={holeIdx + 1} />
+      <GolfMap center={center} zoom={17} mapType="satellite" onMapPress={onMapPress} tee={hole.tee} greens={hole} hazards={hole.hazards} onHazardPress={onHazardPress} gpsPos={gpsPos} pois={coursePois} recenterKey={holeIdx + 1} />
 
       <View style={[styles.topBar, { top: insets.top + 6 }]}>
         <Pressable testID="editor-back-btn" onPress={() => router.push("/courses")} style={styles.iconBtn}>
@@ -132,6 +143,11 @@ export default function CourseEditor() {
           <Pressable testID="editor-mode-delete" onPress={() => setMode("delete")} style={[styles.modeBtn, { backgroundColor: mode === "delete" ? colors.red : colors.zinc100 }]}>
             <Text style={[styles.modeTxt, { color: mode === "delete" ? "#fff" : colors.zinc600 }]}>DELETE MARKER</Text>
           </Pressable>
+          {POI_MODES.map(([k, l]) => (
+            <Pressable key={k} testID={`editor-poi-${k}`} onPress={() => setMode(k)} style={[styles.modeBtn, { backgroundColor: mode === k ? colors.water : colors.zinc100 }, course[k] && styles.modeDone]}>
+              <Text style={[styles.modeTxt, { color: mode === k ? "#fff" : colors.zinc600 }]}>{l} {course[k] ? "✓" : ""}</Text>
+            </Pressable>
+          ))}
         </ScrollView>
 
         {mode === "hazard" && (

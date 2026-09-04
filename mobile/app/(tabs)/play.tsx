@@ -62,6 +62,7 @@ export default function Rangefinder() {
   const [puttDraft, setPuttDraft] = useState(2);
   const [flyoverKey, setFlyoverKey] = useState(0);
   const [arcsOn, setArcsOn] = useState(false);
+  const [hazOpen, setHazOpen] = useState(false);
   const [pins, setPins] = useState<Record<string, LatLng>>({});
   const pinsRef = useRef<Record<string, LatLng>>({});
   const [pendingGreen, setPendingGreen] = useState(false);
@@ -499,6 +500,31 @@ export default function Rangefinder() {
         flyoverKey={flyoverKey}
       />
 
+      {hazOpen && (hole?.hazards?.length || 0) > 0 && (
+        <View style={styles.hazPanel} testID="hazard-panel">
+          <Text style={styles.hazPanelTitle}>HAZARDS · from {ball ? "ball" : "you"}</Text>
+          <ScrollView style={{ maxHeight: 190 }} showsVerticalScrollIndicator={false}>
+            {(hole.hazards || []).map((h: any) => {
+              const origin = ball || gpsPos;
+              const front = origin ? (haversineMeters(origin, { lat: h.lat, lng: h.lng }) as number) : null;
+              const carry = origin && h.carryLat != null && h.carryLng != null ? (haversineMeters(origin, { lat: h.carryLat, lng: h.carryLng }) as number) : null;
+              return (
+                <Pressable key={h.id} style={styles.hazRow} testID={`hazard-row-${h.id}`} onPress={() => { setTarget({ lat: h.lat, lng: h.lng }); setTargetLabel(h.name.toUpperCase()); }}>
+                  <View style={[styles.hazDot, { backgroundColor: h.type === "WATER" ? colors.water : h.type === "BUNKER" ? colors.gold : colors.fairway }]} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.hazName} numberOfLines={1}>{h.name}</Text>
+                    <Text style={styles.hazDist}>
+                      {front != null ? `Front ${fmtDist(front, unit)}` : "Front —"}
+                      {carry != null ? `  ·  Carry ${fmtDist(carry, unit)}` : ""} {unitLabel(unit).toLowerCase()}
+                    </Text>
+                  </View>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        </View>
+      )}
+
       {/* Top bar */}
       <View style={[styles.topBar, { top: insets.top + 6 }]} pointerEvents="box-none">
         <Pressable testID="rf-home-btn" onPress={() => router.push("/")} style={styles.iconBtn}>
@@ -633,6 +659,11 @@ export default function Rangefinder() {
         <Pressable testID="dist-arcs-btn" onPress={() => setArcsOn((v) => !v)} style={[styles.iconBtn, arcsOn && { backgroundColor: colors.charcoal }]}>
           <Ionicons name="radio-outline" size={20} color={arcsOn ? colors.gold : colors.charcoal} />
         </Pressable>
+        {(hole?.hazards?.length || 0) > 0 && (
+          <Pressable testID="hazard-panel-btn" onPress={() => setHazOpen((v) => !v)} style={[styles.iconBtn, hazOpen && { backgroundColor: colors.gold }]}>
+            <Ionicons name="warning" size={20} color={colors.charcoal} />
+          </Pressable>
+        )}
         <Pressable testID="recenter-btn" onPress={() => setRecenter((t) => t + 1)} style={styles.iconBtn}>
           <Ionicons name="locate" size={20} color={colors.charcoal} />
         </Pressable>
@@ -847,6 +878,12 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.charcoal },
   topBar: { position: "absolute", left: 12, right: 12, flexDirection: "row", alignItems: "flex-start", gap: 8, zIndex: 20 },
   iconBtn: { height: 44, width: 44, borderRadius: 14, backgroundColor: "#fff", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.zinc300, shadowColor: "#000", shadowOpacity: 0.2, shadowRadius: 6, elevation: 4 },
+  hazPanel: { position: "absolute", left: 12, top: 150, width: 210, backgroundColor: "rgba(255,255,255,0.96)", borderRadius: 16, padding: 12, borderWidth: 1, borderColor: colors.gold, shadowColor: "#000", shadowOpacity: 0.25, shadowRadius: 8, elevation: 6 },
+  hazPanelTitle: { fontSize: 10, fontWeight: "900", letterSpacing: 0.5, color: colors.zinc500, marginBottom: 6 },
+  hazRow: { flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: colors.zinc100 },
+  hazDot: { width: 12, height: 12, borderRadius: 6, borderWidth: 1.5, borderColor: "#fff" },
+  hazName: { fontSize: 12, fontWeight: "800", color: colors.charcoal },
+  hazDist: { fontSize: 11, fontWeight: "700", color: colors.green, marginTop: 1 },
   holePill: { flexDirection: "row", alignItems: "center", backgroundColor: "#fff", borderRadius: 14, height: 44, borderWidth: 1, borderColor: colors.zinc300, shadowColor: "#000", shadowOpacity: 0.2, shadowRadius: 6, elevation: 4 },
   holeArrow: { paddingHorizontal: 8, height: "100%", justifyContent: "center" },
   holeNum: { fontSize: 13, fontWeight: "900", color: colors.charcoal },
