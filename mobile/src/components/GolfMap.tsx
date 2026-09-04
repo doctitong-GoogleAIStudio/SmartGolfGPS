@@ -39,6 +39,8 @@ type Props = {
   followPos?: LatLng | null;
   gpsPath?: { lat: number; lng: number }[];
   shotLines?: ShotLine[];
+  distanceArcs?: boolean;
+  arcUnit?: string;
   flyover?: { from: LatLng; to: LatLng } | null;
   flyoverKey?: number;
   style?: any;
@@ -72,6 +74,17 @@ function line(coords: LatLng[]): GeoJSON.Feature {
   return { type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: coords.map((c) => [c.lng, c.lat]) } };
 }
 
+function ringCoords(c: LatLng, meters: number): [number, number][] {
+  const pts: [number, number][] = [];
+  const dLat = meters / 111320;
+  const dLng = meters / (111320 * Math.cos((c.lat * Math.PI) / 180));
+  for (let a = 0; a <= 360; a += 8) {
+    const rad = (a * Math.PI) / 180;
+    pts.push([c.lng + dLng * Math.sin(rad), c.lat + dLat * Math.cos(rad)]);
+  }
+  return pts;
+}
+
 export function GolfMap({
   center,
   zoom = 17,
@@ -92,6 +105,8 @@ export function GolfMap({
   followPos,
   gpsPath = [],
   shotLines = [],
+  distanceArcs = false,
+  arcUnit = "yd",
   flyover = null,
   flyoverKey = 0,
   style,
@@ -133,6 +148,21 @@ export function GolfMap({
     features: shotLines.map((s) => line([s.start, s.end])),
   };
 
+  const arcCenter = ball || gpsPos;
+  const arcs = useMemo(() => {
+    if (!distanceArcs || !arcCenter) return null;
+    const feats: GeoJSON.Feature[] = [];
+    const labels: { r: number; lat: number; lng: number }[] = [];
+    [100, 150, 200, 250].forEach((r) => {
+      const m = arcUnit === "m" ? r : r / 1.09361;
+      const ring = ringCoords(arcCenter, m);
+      feats.push({ type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: ring } });
+      labels.push({ r, lng: ring[0][0], lat: ring[0][1] });
+    });
+    return { fc: { type: "FeatureCollection", features: feats } as GeoJSON.FeatureCollection, labels };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [distanceArcs, arcCenter?.lat, arcCenter?.lng, arcUnit]);
+
   return (
     <Map
       ref={mapRef}
@@ -146,6 +176,17 @@ export function GolfMap({
       testID="golf-map"
     >
       <Camera ref={cameraRef} initialViewState={{ center: [center.lng, center.lat], zoom }} />
+
+      {arcs && (
+        <GeoJSONSource id="dist-arcs" data={arcs.fc}>
+          <Layer id="dist-arcs-line" type="line" source="dist-arcs" paint={{ "line-color": "#FFFFFF", "line-width": 1, "line-opacity": 0.5, "line-dasharray": [1, 2] }} />
+        </GeoJSONSource>
+      )}
+      {arcs?.labels.map((l) => (
+        <Marker key={`arc-${l.r}`} lngLat={[l.lng, l.lat]} anchor="center">
+          <View style={styles.arcLabel}><Text style={styles.arcLabelTxt}>{l.r}{arcUnit === "m" ? "m" : "y"}</Text></View>
+        </Marker>
+      ))}
 
       {gpsPath.length > 1 && (
         <GeoJSONSource id="gps-path" data={line(gpsPath.map((p) => ({ lat: p.lat, lng: p.lng })))}>
@@ -291,6 +332,8 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
   },
   distLabelTxt: { color: "#fff", fontSize: 12, fontWeight: "800" },
+  arcLabel: { backgroundColor: "rgba(0,0,0,0.55)", borderRadius: 6, paddingHorizontal: 5, paddingVertical: 1 },
+  arcLabelTxt: { color: "#fff", fontSize: 10, fontWeight: "800" },
   ballMk: { width: 16, height: 16, borderRadius: 8, backgroundColor: "#fff", borderWidth: 3, borderColor: colors.fairway },
   gpsWrap: { width: 44, height: 44, alignItems: "center", justifyContent: "center" },
   gpsArrow: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, alignItems: "center" },

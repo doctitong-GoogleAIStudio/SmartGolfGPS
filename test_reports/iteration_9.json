@@ -1,0 +1,27 @@
+{
+  "summary": "Mobile Expo web preview regression for Phase 1 Course Overview + Start Round workflow. All 5 targeted flows PASS with 0 console errors. Start Round on /start-round -> /course-overview renders course-overview-screen with header 'Apo Highlands Demo (DEMO DATA)' and '18 HOLES · PAR 72 · 6562 YD'. overview-start-round-btn navigates to /play (rangefinder-screen) with HOLE 1 header. On /play, rf-overview-btn correctly returns to /course-overview and dist-arcs-btn toggles twice with no crash. /play regression: HOLE header, F/C/B distances (Front 336, Center 350, Back 364 yd shown), MAP/SCORE/CADDIE/BAG/MORE bottom nav, TRACK SHOT/SET BALL ON MAP/GPS controls present. Navigation across /, /courses, /ph-courses is clean. Web stubs (CourseOverviewMap.web 'Course overview' + GolfMap.web 'Satellite map') behave as designed — not flagged.",
+  "platforms_tested": ["mobile"],
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "mobile": {
+      "ui_bugs": [],
+      "integration_issues": [],
+      "design_issues": [],
+      "react_native_issues": []
+    }
+  },
+  "parity_issues": [],
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "course-overview.tsx computes totals.yds via haversineMeters * 1.09361, but the label is hardcoded 'YD' regardless of settings.distanceUnit (line 74). Minor inconsistency for metric users; header footer uses fmtDist+unitLabel in the popup but not in the top card.",
+    "goHole and startRound both router.replace('/play') — good; Modal has proper testID='overview-hole-popup' and per-action testIDs (overview-view-hole-btn / overview-navigate-tee-btn / overview-view-green-btn) which currently all route to the same goHole(n). If distinct behaviors are intended (tee vs green vs full hole), they need separate params — currently they are aliases.",
+    "start-round.tsx correctly persists sg_quick_course before router.replace('/course-overview') so the overview can hydrate the course from cachedGet."
+  ],
+  "updated_files": [],
+  "success_rate": {"frontend": "100%"},
+  "seed_data_creation": "None. Reused demo-apo-davao seeded course.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Expo preview: https://smart-golf-gps.expo.preview.emergentagent.com. Key testIDs verified: start-round-screen, start-course-demo-apo-davao, start-holes-18, start-round-btn, course-overview-screen, overview-start-round-btn, overview-back-btn, rangefinder-screen, rf-overview-btn, dist-arcs-btn. CourseOverviewMap.web and GolfMap.web are intentional web stubs — native-only satellite/markers/arcs. GPS DENIED badge on /play is expected on web (no geolocation permission)."
+}

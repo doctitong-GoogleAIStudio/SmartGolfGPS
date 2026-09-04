@@ -101,6 +101,14 @@ iteration_3 (mobile enhancements): 4/4 PASS (GCash QR, Weather On Card, Voice Ca
 
 ## Notes for next agent
 
+### PHASE 1 — Full 18-Hole Course Overview + Start-Round workflow (2026-06)
+- New route app/course-overview.tsx + src/components/CourseOverviewMap.tsx (native MapLibre) with .web.tsx stub. Shows all holes at once: numbered tee markers (1–18), green flag markers, dashed green→next-tee route, "START HERE" badge on hole 1, auto fitBounds(all tee+green coords) with padding, live GPS dot, and a tap-hole popup (Par/dist/HCP + live tee distance & 8-pt compass via useGPS).
+- Workflow: start-round.tsx START ROUND now routes to /course-overview (round already created); overview START ROUND → /play at hole 1; per-hole VIEW HOLE/NAVIGATE TO TEE/VIEW GREEN → /play at that hole via storage key sg_start_hole (play.tsx reads+clears it in the focus effect). play.tsx added COURSE OVERVIEW button (rf-overview-btn) + Distance Arcs toggle (dist-arcs-btn).
+- Distance arcs (spec §10): GolfMap.tsx new props distanceArcs + arcUnit; draws 100/150/200/250 rings (ringCoords equirectangular) around ball||gpsPos with labels. Toggle state arcsOn in play.tsx.
+- Header now unit-aware (fmtDist). Demo course demo-apo-davao already has 18 holes w/ tee+F/C/B coords → acceptance course.
+- KNOWN: popup's VIEW HOLE / NAVIGATE TO TEE / VIEW GREEN all currently open the hole (aliases) — VIEW GREEN green-focus zoom not yet distinct. Native-only map; verified chrome+nav on web (iteration_9, 5/5). Markers/arcs verify on device build.
+- REMAINING PHASES (spec): distinct green-detail zoom + movable pin, hazard carry distances, GPS power modes, next-tee "SHOW ON MAP"/course navigation mode (clubhouse/range/parking), admin polygon drawing (fairway/green/bunker/water/OB), advanced analytics/trends, 18-hole quick selector grid on overview.
+
 ### EAS build fix — Node engine incompatibility (2026-06)
 - Symptom: EAS Android build failed at INSTALL_DEPENDENCIES with `error @mapbox/jsonlint-lines-primitives@2.0.3: The engine "node" is incompatible ... Expected ">= 22". Got "20.19.4"` → `Found incompatible module` (yarn classic hard-errors).
 - Cause: transitive dep of @maplibre/maplibre-react-native (via @maplibre/maplibre-gl-style-spec) pins jsonlint-lines-primitives@^2.0.3, which declares engines.node>=22; EAS builder runs Node 20.

@@ -28,7 +28,7 @@ export default function StartRound() {
     await setActiveRound({ id: r.id, courseId, currentHole: 1 });
     await storage.setItem("sg_quick_course", courseId);
     toast.success("Round started — good luck!");
-    router.replace("/play");
+    router.replace("/course-overview");
   };
 
   return (

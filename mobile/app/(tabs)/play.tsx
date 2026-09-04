@@ -61,6 +61,7 @@ export default function Rangefinder() {
   const [puttReminder, setPuttReminder] = useState<{ holeNumber: number } | null>(null);
   const [puttDraft, setPuttDraft] = useState(2);
   const [flyoverKey, setFlyoverKey] = useState(0);
+  const [arcsOn, setArcsOn] = useState(false);
 
   const nearGreenRef = useRef(false);
   const puttDismissedRef = useRef<Set<number>>(new Set());
@@ -96,7 +97,9 @@ export default function Rangefinder() {
         try {
           if (cid) {
             const c = await cachedGet(`/courses/${cid}`, `course_${cid}`);
-            if (alive) { setCourse(c); setHoleIdx((a?.currentHole || 1) - 1); }
+            const sh = await storage.getItem<string>("sg_start_hole", "");
+            if (sh) storage.removeItem("sg_start_hole");
+            if (alive) { setCourse(c); setHoleIdx(sh ? Number(sh) - 1 : (a?.currentHole || 1) - 1); }
           } else {
             const cs = await cachedGet<any[]>("/courses", "courses");
             if (alive && cs[0]) setCourse(cs[0]);
@@ -455,6 +458,8 @@ export default function Rangefinder() {
         followPos={camMode !== "free" ? gpsPos : null}
         onUserPan={() => setCamMode("free")}
         gpsPath={activeRound ? gpsPath : []}
+        distanceArcs={arcsOn}
+        arcUnit={unit}
         flyover={hole?.tee && hole?.greenCenter ? { from: hole.tee, to: hole.greenCenter } : null}
         flyoverKey={flyoverKey}
       />
@@ -463,6 +468,9 @@ export default function Rangefinder() {
       <View style={[styles.topBar, { top: insets.top + 6 }]} pointerEvents="box-none">
         <Pressable testID="rf-home-btn" onPress={() => router.push("/")} style={styles.iconBtn}>
           <Ionicons name="home" size={20} color={colors.charcoal} />
+        </Pressable>
+        <Pressable testID="rf-overview-btn" onPress={() => router.push("/course-overview")} style={styles.iconBtn}>
+          <Ionicons name="map" size={20} color={colors.charcoal} />
         </Pressable>
         {course && (
           <View style={styles.holePill}>
@@ -586,6 +594,9 @@ export default function Rangefinder() {
       <View style={[styles.rightCtrls, { top: insets.top + 60 }]}>
         <Pressable testID="map-type-btn" onPress={() => setMapType((m) => (m === "satellite" ? "hybrid" : m === "hybrid" ? "map" : "satellite"))} style={styles.iconBtn}>
           <Ionicons name="layers" size={20} color={colors.charcoal} />
+        </Pressable>
+        <Pressable testID="dist-arcs-btn" onPress={() => setArcsOn((v) => !v)} style={[styles.iconBtn, arcsOn && { backgroundColor: colors.charcoal }]}>
+          <Ionicons name="radio-outline" size={20} color={arcsOn ? colors.gold : colors.charcoal} />
         </Pressable>
         <Pressable testID="recenter-btn" onPress={() => setRecenter((t) => t + 1)} style={styles.iconBtn}>
           <Ionicons name="locate" size={20} color={colors.charcoal} />
