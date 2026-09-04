@@ -56,6 +56,55 @@ class TestCourses:
             assert isinstance(demo[k]["lng"], (int, float))
         assert len(demo["holes"]) == 18
 
+    def test_demo_holes_have_polygons_field(self, s):
+        """Phase 3 addition: Hole model has polygons: List[HolePolygon] (may be empty by default)."""
+        r = s.get(f"{API}/courses/demo-apo-davao", timeout=15)
+        assert r.status_code == 200
+        demo = r.json()
+        for h in demo["holes"]:
+            assert "polygons" in h, f"hole {h['holeNumber']} missing polygons key"
+            assert isinstance(h["polygons"], list)
+
+    def test_polygons_round_trip_via_put(self, s):
+        """Create course, add polygon to hole 1, PUT, GET back → verify persisted."""
+        payload = {"name": "TEST_Polygon_Course", "location": "Testland", "latitude": 7.05, "longitude": 125.5, "holeCount": 3}
+        r = s.post(f"{API}/courses", json=payload)
+        assert r.status_code == 200
+        c = r.json()
+        cid = c["id"]
+        try:
+            poly = {"type": "FAIRWAY", "points": [
+                {"lat": 7.0501, "lng": 125.5001},
+                {"lat": 7.0502, "lng": 125.5002},
+                {"lat": 7.0503, "lng": 125.5001},
+            ]}
+            c["holes"][0]["polygons"] = [poly]
+            # add a second polygon of type GREEN on hole 2
+            poly2 = {"type": "GREEN", "points": [
+                {"lat": 7.06, "lng": 125.6},
+                {"lat": 7.061, "lng": 125.601},
+                {"lat": 7.062, "lng": 125.6},
+                {"lat": 7.061, "lng": 125.599},
+            ]}
+            c["holes"][1]["polygons"] = [poly2]
+            r = s.put(f"{API}/courses/{cid}", json=c)
+            assert r.status_code == 200, r.text
+            # GET back
+            r = s.get(f"{API}/courses/{cid}")
+            assert r.status_code == 200
+            got = r.json()
+            h1polys = got["holes"][0]["polygons"]
+            assert len(h1polys) == 1
+            assert h1polys[0]["type"] == "FAIRWAY"
+            assert len(h1polys[0]["points"]) == 3
+            assert h1polys[0]["points"][0]["lat"] == pytest.approx(7.0501)
+            assert h1polys[0]["points"][0]["lng"] == pytest.approx(125.5001)
+            h2polys = got["holes"][1]["polygons"]
+            assert len(h2polys) == 1 and h2polys[0]["type"] == "GREEN"
+            assert len(h2polys[0]["points"]) == 4
+        finally:
+            s.delete(f"{API}/courses/{cid}")
+
     def test_course_crud(self, s):
         payload = {"name": "TEST_Course_X", "location": "Nowhere", "latitude": 1.0, "longitude": 2.0, "holeCount": 9}
         r = s.post(f"{API}/courses", json=payload)

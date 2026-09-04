@@ -75,6 +75,11 @@ class Hazard(BaseModel):
     carryLng: Optional[float] = None
 
 
+class HolePolygon(BaseModel):
+    type: str = "FAIRWAY"
+    points: List[LatLng] = []
+
+
 class Hole(BaseModel):
     holeNumber: int
     par: int = 4
@@ -84,6 +89,7 @@ class Hole(BaseModel):
     greenCenter: Optional[LatLng] = None
     greenBack: Optional[LatLng] = None
     hazards: List[Hazard] = []
+    polygons: List[HolePolygon] = []
 
 
 class Course(BaseModel):

@@ -494,13 +494,30 @@ export default function Rangefinder() {
         gpsPath={activeRound ? gpsPath : []}
         distanceArcs={arcsOn}
         arcUnit={unit}
+        polygons={hole?.polygons || []}
         focusKey={greenFocus?.key}
         focusTarget={greenFocus?.point}
         flyover={hole?.tee && hole?.greenCenter ? { from: hole.tee, to: hole.greenCenter } : null}
         flyoverKey={flyoverKey}
       />
 
+      {(() => {
+        const nextHole = course?.holes?.[holeIdx + 1];
+        const nearGreen = hole?.greenCenter && gpsPos ? (haversineMeters(gpsPos, hole.greenCenter) as number) < 55 : false;
+        if (!nearGreen || !nextHole?.tee || !gpsPos) return null;
+        const d = haversineMeters(gpsPos, nextHole.tee) as number;
+        const dir = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"][Math.round(bearingDeg(gpsPos, nextHole.tee) / 45) % 8];
+        return (
+          <Pressable style={styles.nextTee} onPress={() => setHoleIdx(holeIdx + 1)} testID="next-tee-banner">
+            <Ionicons name="walk" size={18} color={colors.charcoal} />
+            <Text style={styles.nextTeeTxt}>NEXT TEE · HOLE {nextHole.holeNumber} · {fmtDist(d, unit)} {unitLabel(unit).toLowerCase()} {dir}</Text>
+            <Ionicons name="chevron-forward" size={16} color={colors.charcoal} />
+          </Pressable>
+        );
+      })()}
+
       {hazOpen && (hole?.hazards?.length || 0) > 0 && (
+
         <View style={styles.hazPanel} testID="hazard-panel">
           <Text style={styles.hazPanelTitle}>HAZARDS · from {ball ? "ball" : "you"}</Text>
           <ScrollView style={{ maxHeight: 190 }} showsVerticalScrollIndicator={false}>
@@ -884,6 +901,8 @@ const styles = StyleSheet.create({
   hazDot: { width: 12, height: 12, borderRadius: 6, borderWidth: 1.5, borderColor: "#fff" },
   hazName: { fontSize: 12, fontWeight: "800", color: colors.charcoal },
   hazDist: { fontSize: 11, fontWeight: "700", color: colors.green, marginTop: 1 },
+  nextTee: { position: "absolute", top: 96, alignSelf: "center", flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: colors.gold, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 10, shadowColor: "#000", shadowOpacity: 0.25, shadowRadius: 6, elevation: 5 },
+  nextTeeTxt: { fontSize: 12, fontWeight: "900", color: colors.charcoal, letterSpacing: 0.3 },
   holePill: { flexDirection: "row", alignItems: "center", backgroundColor: "#fff", borderRadius: 14, height: 44, borderWidth: 1, borderColor: colors.zinc300, shadowColor: "#000", shadowOpacity: 0.2, shadowRadius: 6, elevation: 4 },
   holeArrow: { paddingHorizontal: 8, height: "100%", justifyContent: "center" },
   holeNum: { fontSize: 13, fontWeight: "900", color: colors.charcoal },

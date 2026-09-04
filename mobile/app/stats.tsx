@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator } from "react-native";
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Pressable } from "react-native";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors, font } from "@/src/theme";
@@ -45,6 +45,9 @@ export default function Stats() {
       <View style={{ paddingTop: insets.top, backgroundColor: colors.charcoal }} />
       <ScreenHeader overline="STATISTICS" title="My Game" onBack={() => router.back()} testID="stats-screen" />
       <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40, gap: 16 }}>
+        <Pressable onPress={() => router.push("/trends")} testID="view-trends-btn" style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, height: 48, borderRadius: 14, backgroundColor: colors.charcoal }}>
+          <Text style={{ color: colors.gold, fontWeight: "900", letterSpacing: 1 }}>VIEW PERFORMANCE TRENDS</Text>
+        </Pressable>
         <View style={styles.grid}>
           {cards.map(([l, v]) => (
             <View key={l} style={styles.card} testID={`stat-${l.replace(/[\s%]/g, "-").toLowerCase()}`}>

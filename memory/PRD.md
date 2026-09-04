@@ -101,6 +101,13 @@ iteration_3 (mobile enhancements): 4/4 PASS (GCash QR, Weather On Card, Voice Ca
 
 ## Notes for next agent
 
+### Polygon Drawing + Performance Trends + Turn-by-Turn To Tee (2026-06)
+- Polygon Drawing: backend Hole.polygons: List[HolePolygon{type, points:[LatLng]}]. Editor (courses/[id]/edit.tsx) DRAW FAIRWAY/GREEN/BUNKER/WATER modes → tap map appends vertices (draft cleared on mode switch); UNDO + FINISH SHAPE (>=3 pts) saves to hole.polygons; SAVE persists via PUT. GolfMap renders polygons as fill+outline (POLY_COLORS, data-driven fill-color); also shown on /play via polygons={hole.polygons}.
+- Performance Trends: /trends screen (bar charts Score-to-Par/Putts/GIR% with IMPROVING/WATCH tag) from /stats recentRounds; reached via VIEW PERFORMANCE TRENDS on /stats.
+- Turn-by-Turn To Tee: /play next-tee-banner (GPS-gated: shows within ~55m of current green) → next hole tee distance+compass; tap advances hole (guarded by nextHole existence).
+- Verified iteration_12: backend 16/16 (incl 2 polygon round-trip tests), mobile all render + nav, 0 console errors. Native-only visuals (polygon fills, drawing, banner) confirm on device build.
+- REMAINING (spec backlog): advanced analytics beyond 3 trend metrics; OB-zone polygon type; turn-by-turn continuous re-routing.
+
 ### Admin POI Editor + Hazard Panel + GPS Power Modes (2026-06)
 - Admin POI Editor: course editor (courses/[id]/edit.tsx) has POI modes CLUBHOUSE/RANGE/PRACTICE/PARKING (POI_MODES); selecting one + tapping the map sets course.<key>={lat,lng}; shown via GolfMap new `pois` prop (labeled markers); persists on SAVE (PUT /courses/{id}; Course model already has the fields). ✓ shows when placed.
 - Hazard Panel: play.tsx hazard-panel-btn (only when hole has hazards) toggles hazard-panel listing each hazard with Front (origin→lat/lng) + Carry (origin→carryLat/carryLng if present), origin = ball||gpsPos; tapping a row targets it.

@@ -45,9 +45,17 @@ type Props = {
   focusTarget?: LatLng | null;
   focusZoom?: number;
   pois?: { key: string; label: string; pt: LatLng }[];
+  polygons?: { type: string; points: LatLng[] }[];
   flyover?: { from: LatLng; to: LatLng } | null;
   flyoverKey?: number;
   style?: any;
+};
+
+const POLY_COLORS: Record<string, string> = {
+  FAIRWAY: "#4ade80",
+  GREEN: "#86efac",
+  BUNKER: "#fbbf24",
+  WATER: "#38bdf8",
 };
 
 const HAZARD_COLORS: Record<string, string> = {
@@ -115,6 +123,7 @@ export function GolfMap({
   focusTarget = null,
   focusZoom = 18.5,
   pois = [],
+  polygons = [],
   flyover = null,
   flyoverKey = 0,
   style,
@@ -189,6 +198,13 @@ export function GolfMap({
       testID="golf-map"
     >
       <Camera ref={cameraRef} initialViewState={{ center: [center.lng, center.lat], zoom }} />
+
+      {polygons.length > 0 && (
+        <GeoJSONSource id="hole-polys" data={{ type: "FeatureCollection", features: polygons.filter((p) => p.points.length >= 3).map((p) => ({ type: "Feature", properties: { color: POLY_COLORS[p.type] || "#9ca3af" }, geometry: { type: "Polygon", coordinates: [[...p.points.map((pt) => [pt.lng, pt.lat]), [p.points[0].lng, p.points[0].lat]]] } })) }}>
+          <Layer id="hole-polys-fill" type="fill" source="hole-polys" paint={{ "fill-color": ["get", "color"], "fill-opacity": 0.35 }} />
+          <Layer id="hole-polys-line" type="line" source="hole-polys" paint={{ "line-color": ["get", "color"], "line-width": 1.5 }} />
+        </GeoJSONSource>
+      )}
 
       {arcs && (
         <GeoJSONSource id="dist-arcs" data={arcs.fc}>

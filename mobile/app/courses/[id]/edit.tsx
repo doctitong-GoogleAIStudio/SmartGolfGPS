@@ -34,6 +34,7 @@ export default function CourseEditor() {
   const [course, setCourse] = useState<any>(null);
   const [holeIdx, setHoleIdx] = useState(0);
   const [mode, setMode] = useState("tee");
+  const [draft, setDraft] = useState<{ type: string; points: { lat: number; lng: number }[] } | null>(null);
   const [hazardType, setHazardType] = useState("BUNKER");
 
   useEffect(() => {
@@ -64,6 +65,9 @@ export default function CourseEditor() {
     } else if (POI_KEYS.includes(mode)) {
       setCourse({ ...course, [mode]: { lat: p.lat, lng: p.lng } });
       toast.success(`${POI_MODES.find((m) => m[0] === mode)?.[1]} placed`);
+    } else if (mode.startsWith("draw:")) {
+      const type = mode.slice(5);
+      setDraft((d) => (d && d.type === type ? { ...d, points: [...d.points, { lat: p.lat, lng: p.lng }] } : { type, points: [{ lat: p.lat, lng: p.lng }] }));
     } else {
       patchHole({ [mode]: { lat: p.lat, lng: p.lng } });
       toast.success(`${MODES.find((m) => m[0] === mode)?.[1] || mode} placed`);
@@ -88,10 +92,17 @@ export default function CourseEditor() {
 
   const center = hole.tee || hole.greenCenter || gpsPos || { lat: course.latitude, lng: course.longitude };
   const coursePois = POI_MODES.filter(([k]) => course[k]).map(([k, l]) => ({ key: k, label: l, pt: course[k] }));
+  const livePolys = draft ? [...(hole.polygons || []), draft] : (hole.polygons || []);
+  const finishShape = () => {
+    if (!draft || draft.points.length < 3) { toast.error("Tap at least 3 points first"); return; }
+    patchHole({ polygons: [...(hole.polygons || []), draft] });
+    setDraft(null);
+    toast.success(`${draft.type} shape saved`);
+  };
 
   return (
     <View style={styles.screen} testID="course-editor-screen">
-      <GolfMap center={center} zoom={17} mapType="satellite" onMapPress={onMapPress} tee={hole.tee} greens={hole} hazards={hole.hazards} onHazardPress={onHazardPress} gpsPos={gpsPos} pois={coursePois} recenterKey={holeIdx + 1} />
+      <GolfMap center={center} zoom={17} mapType="satellite" onMapPress={onMapPress} tee={hole.tee} greens={hole} hazards={hole.hazards} onHazardPress={onHazardPress} gpsPos={gpsPos} pois={coursePois} polygons={livePolys} recenterKey={holeIdx + 1} />
 
       <View style={[styles.topBar, { top: insets.top + 6 }]}>
         <Pressable testID="editor-back-btn" onPress={() => router.push("/courses")} style={styles.iconBtn}>
@@ -148,7 +159,24 @@ export default function CourseEditor() {
               <Text style={[styles.modeTxt, { color: mode === k ? "#fff" : colors.zinc600 }]}>{l} {course[k] ? "✓" : ""}</Text>
             </Pressable>
           ))}
+          {[["FAIRWAY", "DRAW FAIRWAY"], ["GREEN", "DRAW GREEN"], ["BUNKER", "DRAW BUNKER"], ["WATER", "DRAW WATER"]].map(([t, l]) => (
+            <Pressable key={t} testID={`editor-draw-${t.toLowerCase()}`} onPress={() => { setDraft(null); setMode(`draw:${t}`); }} style={[styles.modeBtn, { backgroundColor: mode === `draw:${t}` ? colors.fairway : colors.zinc100 }]}>
+              <Text style={[styles.modeTxt, { color: mode === `draw:${t}` ? "#fff" : colors.zinc600 }]}>{l}</Text>
+            </Pressable>
+          ))}
         </ScrollView>
+
+        {mode.startsWith("draw:") && (
+          <View style={styles.drawRow}>
+            <Text style={styles.drawHint}>{draft ? `${draft.points.length} pts` : "Tap map to add points"}</Text>
+            <Pressable testID="editor-draw-undo" onPress={() => setDraft((d) => (d && d.points.length ? { ...d, points: d.points.slice(0, -1) } : d))} style={styles.drawBtn}>
+              <Text style={styles.drawBtnTxt}>UNDO</Text>
+            </Pressable>
+            <Pressable testID="editor-draw-finish" onPress={finishShape} style={[styles.drawBtn, { backgroundColor: colors.green }]}>
+              <Text style={[styles.drawBtnTxt, { color: "#fff" }]}>FINISH SHAPE</Text>
+            </Pressable>
+          </View>
+        )}
 
         {mode === "hazard" && (
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
@@ -185,6 +213,10 @@ const styles = StyleSheet.create({
   hint: { marginLeft: "auto", fontSize: 10, fontWeight: "700", color: colors.zinc400, textAlign: "right" },
   modeBtn: { height: 44, paddingHorizontal: 12, borderRadius: 12, alignItems: "center", justifyContent: "center" },
   modeDone: { borderWidth: 2, borderColor: "rgba(34,197,94,0.5)" },
+  drawRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 8 },
+  drawHint: { flex: 1, fontSize: 12, fontWeight: "800", color: colors.zinc500 },
+  drawBtn: { paddingHorizontal: 14, height: 36, borderRadius: 10, backgroundColor: colors.zinc100, alignItems: "center", justifyContent: "center" },
+  drawBtnTxt: { fontSize: 12, fontWeight: "900", color: colors.charcoal, letterSpacing: 0.5 },
   modeTxt: { fontSize: 10, fontWeight: "900", letterSpacing: 0.5 },
   hazBtn: { height: 36, paddingHorizontal: 12, borderRadius: 10, alignItems: "center", justifyContent: "center" },
   hazTxt: { fontSize: 10, fontWeight: "900" },

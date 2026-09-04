@@ -1,0 +1,32 @@
+{
+  "summary": "Iteration 12 – Backend + Mobile validation of three new additions: (1) Polygon drawing on course editor, (2) Performance Trends screen, (3) Turn-by-turn NEXT TEE banner. Backend: 16/16 pytest cases PASS including 2 new polygon tests (demo-apo-davao holes expose polygons: [] key by default, and PUT /api/courses/{id} round-trips FAIRWAY+GREEN polygons with correct type and point counts). Mobile (Expo web preview, 390x844): (A) /stats view-trends-btn renders and navigates to /trends where trends-screen mounts; 'Score to Par', 'Putts', 'GIR %' bar-chart cards render (rounds seeded from prior test runs, so empty-state path was NOT exercised but the code path guards on rounds.length === 0). (B) /courses/demo-apo-davao/edit: editor-draw-fairway/green/bunker/water all render and are selectable; selecting DRAW FAIRWAY reveals editor-draw-undo + editor-draw-finish control row; editor-save-btn tap succeeds via PUT /api/courses/{id}, editor screen remains mounted (no crash). Actual vertex placing is native-only per spec. (C) /play (rangefinder-screen) mounts with rf-hole-label, fcb-front/center/back, dist-arcs-btn, rf-overview-btn, hazard-panel-btn all present; next-tee-banner correctly absent on web (GPS-gated, expected). No crashes from banner logic. (D) Regression: /course-overview, /courses, /more (setting-gps-mode-high visible), /start-round, /trends all navigate cleanly with 0 page errors. Only non-fatal deprecation warnings observed (shadow*/textShadow*/pointerEvents/useNativeDriver — same as prior iterations).",
+  "platforms_tested": ["mobile"],
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "mobile": {
+      "ui_bugs": [],
+      "integration_issues": [],
+      "design_issues": [],
+      "react_native_issues": []
+    }
+  },
+  "parity_issues": [],
+  "test_report_links": ["/app/backend/tests/backend_test.py", "/app/test_reports/pytest/pytest_results.xml"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "trends.tsx line 49: cachedGet is used correctly with catch-fall-through; loaded flag ensures empty-state text only shows after fetch completes — good UX.",
+    "trends.tsx Bars: min/range guarded via Math.max(range,1) preventing NaN when all values equal.",
+    "edit.tsx line 95: livePolys spreads hole.polygons + draft so the in-progress polygon renders live with committed shapes — correct.",
+    "edit.tsx line 97: finishShape requires >=3 points before saving — good validation. Draft is cleared on save, but not on mode-change (switching draw type from FAIRWAY → GREEN preserves existing FAIRWAY vertices as GREEN). Consider clearing draft on setMode change.",
+    "server.py line 78-92: HolePolygon(type, points:[LatLng]) with default polygons=[] properly serialized; round-trip test confirms Pydantic model validates + persists correctly.",
+    "play.tsx line 511: next-tee-banner onPress increments holeIdx without checking course.holes.length bound — potential index overflow if triggered on last hole. Only active when GPS is within ~55m of last green so low risk but worth guarding."
+  ],
+  "updated_files": ["/app/backend/tests/backend_test.py"],
+  "success_rate": {"backend": "100% (16/16)", "frontend": "100%"},
+  "test_credentials": "N/A (no auth in this app)",
+  "seed_data_creation": "test_polygons_round_trip_via_put creates and deletes a TEST_Polygon_Course; no residual data. Uses seeded demo-apo-davao for read tests.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "All three additions (polygons, trends, next-tee-banner) verified. Backend polygon round-trip is stable. On web preview, next-tee-banner and vertex placing on the satellite map are NATIVE-ONLY (GolfMap.web is a stub) — do not flag as bugs. Prior iterations already saved rounds so /trends now shows bar cards; if you want to test the empty-state path, first DELETE all rounds via DELETE /api/rounds or clear MongoDB. RN <Modal> uses testIDs and closes via backdrop tap (not Escape).",
+  "rca of the issue": ""
+}
