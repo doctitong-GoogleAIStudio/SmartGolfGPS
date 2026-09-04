@@ -87,6 +87,18 @@ iteration_3 (mobile enhancements): 4/4 PASS (GCash QR, Weather On Card, Voice Ca
 - Map callouts: DirectoryMap.tsx markers now show a name bubble on tap via react-native-maps <Callout> (native-only; not visible in web preview stub).
 - Verified via Expo web preview: region chips render, Visayas filter works, Recently Added strip persists with ADDED state. Callouts unverifiable on web (native maps).
 
+### PH directory v5 (2026-06)
+- Region chips now show a course count badge per region (All = total 98; e.g. Mindanao 18, Visayas 15, Metro Manila 10) — counts derived from the directory list.
+- Course cards redesigned with a real golf photo header (expo-image) instead of the initials badge: photo banner + dark shade + course name overlay + holes chip; location/distance + ADD in the body. Photos assigned deterministically from a 6-image Unsplash pool via name hash (photoFor). Recently Added strip and map selected-card still use the initials badge (badgeColor/initials retained).
+- Verified on Expo web preview: counts render on chips, photo headers load per card.
+
+### Map engine migration — react-native-maps → MapLibre (2026-06) [CRASH FIX]
+- ROOT CAUSE of "app closed / has a bug" crash on some Android phones at Start Round: react-native-maps uses the Google Maps engine on Android and no Google Maps API key was configured; on newer devices (Samsung/Android 14) the missing key crashed the map screen (/play) at mount.
+- FIX (user chose keyless option): migrated both map components to @maplibre/maplibre-react-native v11.3.8 (Expo config plugin auto-added; requires New Arch, already enabled). Renders the SAME free Esri satellite raster tiles (mapStyle raster source) with NO Google dependency and NO API key — works on all Android incl. no-Google Huawei. react-native-maps was UNINSTALLED.
+- Files: /app/mobile/src/components/GolfMap.tsx and DirectoryMap.tsx fully rewritten to MapLibre API (Map, Camera easeTo/fitBounds, Marker, GeoJSONSource+Layer for polylines). .web.tsx stubs unchanged (web preview shows placeholder — native maps only render in a device build).
+- Behavior change: target flag is no longer drag-to-move (MapLibre Marker has no drag) — target still moves via tap-on-map. Directory map now shows a name-bubble callout above the selected pin. fitBounds keyed on a coord hash so region-filter refits.
+- IMPORTANT: this crash fix can ONLY be validated in a real device build (Publish) — the Expo web preview & Expo Go resolve to the .web.tsx stubs and cannot render/verify native MapLibre. Web-preview regression passed 6/6 (iteration_5.json).
+
 ## Notes for next agent
 - Frontend GPS testing: grant geolocation + set_geolocation(7.0545, 125.5195) before nav; viewport 390x844
 - Settings singleton id="default"; demo course id "demo-apo-davao" — do not delete

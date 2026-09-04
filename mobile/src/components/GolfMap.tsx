@@ -1,6 +1,6 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
-import { View, Text, StyleSheet, Platform } from "react-native";
-import MapView, { Marker, Polyline, UrlTile, Region } from "react-native-maps";
+import React, { useEffect, useMemo, useRef } from "react";
+import { View, Text, StyleSheet } from "react-native";
+import { Map, Camera, Marker, GeoJSONSource, Layer, type CameraRef } from "@maplibre/maplibre-react-native";
 import { colors, font } from "@/src/theme";
 import { LatLng, bearingDeg } from "@/src/lib/geo";
 
@@ -51,8 +51,25 @@ const HAZARD_COLORS: Record<string, string> = {
   "OUT OF BOUNDS": colors.red,
 };
 
-function delta(zoom: number) {
-  return 0.0025 * Math.pow(2, 17 - zoom);
+function buildStyle(mapType: "satellite" | "hybrid" | "map") {
+  const sources: any = {};
+  const layers: any[] = [];
+  if (mapType === "map") {
+    sources.osm = { type: "raster", tiles: [OSM], tileSize: 256, maxzoom: 19 };
+    layers.push({ id: "osm", type: "raster", source: "osm" });
+  } else {
+    sources.esri = { type: "raster", tiles: [ESRI_SAT], tileSize: 256, maxzoom: 19 };
+    layers.push({ id: "esri", type: "raster", source: "esri" });
+    if (mapType === "hybrid") {
+      sources.esriRef = { type: "raster", tiles: [ESRI_REF], tileSize: 256, maxzoom: 19 };
+      layers.push({ id: "esriRef", type: "raster", source: "esriRef" });
+    }
+  }
+  return { version: 8, sources, layers } as any;
+}
+
+function line(coords: LatLng[]): GeoJSON.Feature {
+  return { type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: coords.map((c) => [c.lng, c.lat]) } };
 }
 
 export function GolfMap({
@@ -65,7 +82,6 @@ export function GolfMap({
   gpsPos,
   gpsHeading,
   target,
-  onTargetDrag,
   tee,
   greens,
   hazards = [],
@@ -79,112 +95,76 @@ export function GolfMap({
   flyoverKey = 0,
   style,
 }: Props) {
-  const mapRef = useRef<MapView>(null);
-  const [track, setTrack] = useState(true);
-  const androidTiles = Platform.OS === "android";
-  const isSat = mapType !== "map";
-
-  const region: Region = useMemo(
-    () => ({ latitude: center.lat, longitude: center.lng, latitudeDelta: delta(zoom), longitudeDelta: delta(zoom) }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    []
-  );
-
-  // Static marker bitmaps: capture once, then stop tracking for performance.
-  useEffect(() => {
-    setTrack(true);
-    const t = setTimeout(() => setTrack(false), 1200);
-    return () => clearTimeout(t);
-  }, [tee, greens, hazards]);
+  const cameraRef = useRef<CameraRef>(null);
+  const mapStyle = useMemo(() => buildStyle(mapType), [mapType]);
 
   useEffect(() => {
-    if (recenterKey > 0 && mapRef.current) {
-      mapRef.current.animateToRegion(
-        { latitude: center.lat, longitude: center.lng, latitudeDelta: delta(zoom), longitudeDelta: delta(zoom) },
-        500
-      );
-    }
+    if (recenterKey > 0) cameraRef.current?.easeTo({ center: [center.lng, center.lat], zoom, duration: 500 });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [recenterKey]);
 
   useEffect(() => {
-    if (followPos && mapRef.current) {
-      mapRef.current.animateCamera(
-        { center: { latitude: followPos.lat, longitude: followPos.lng }, ...(gpsHeading != null ? { heading: gpsHeading } : {}) },
-        { duration: 800 }
-      );
+    if (followPos) {
+      cameraRef.current?.easeTo({
+        center: [followPos.lng, followPos.lat],
+        ...(gpsHeading != null ? { bearing: gpsHeading } : {}),
+        duration: 800,
+      });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [followPos?.lat, followPos?.lng]);
 
-  // Hole flyover: on arrival at a new hole, sweep the camera tee -> green.
+  // Hole flyover: sweep the camera tee -> green on arrival at a new hole.
   useEffect(() => {
-    if (!flyoverKey || !flyover || !mapRef.current) return;
-    const m = mapRef.current;
-    const heading = bearingDeg(flyover.from, flyover.to);
-    m.animateCamera({ center: { latitude: flyover.from.lat, longitude: flyover.from.lng }, heading, pitch: 0 }, { duration: 500 });
+    if (!flyoverKey || !flyover) return;
+    const bearing = bearingDeg(flyover.from, flyover.to);
+    cameraRef.current?.easeTo({ center: [flyover.from.lng, flyover.from.lat], bearing, zoom, duration: 500 });
     const t = setTimeout(() => {
-      m.animateCamera({ center: { latitude: flyover.to.lat, longitude: flyover.to.lng }, heading }, { duration: 2400 });
+      cameraRef.current?.easeTo({ center: [flyover.to.lng, flyover.to.lat], bearing, zoom, duration: 2400 });
     }, 650);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [flyoverKey]);
 
-  const nativeType = androidTiles ? "none" : mapType === "map" ? "standard" : mapType === "hybrid" ? "hybrid" : "satellite";
-
-  // react-native-maps is native-only. On the web preview render a branded
-  // placeholder so the rest of each screen stays testable.
-  if (Platform.OS === "web") {
-    return (
-      <View style={[StyleSheet.absoluteFill, styles.webFallback, style]} testID="golf-map">
-        <Text style={styles.webTxt}>Satellite map</Text>
-        <Text style={styles.webSub}>Live map renders on the mobile app</Text>
-      </View>
-    );
-  }
+  const shotFeatures: GeoJSON.FeatureCollection = {
+    type: "FeatureCollection",
+    features: shotLines.map((s) => line([s.start, s.end])),
+  };
 
   return (
-    <MapView
-      ref={mapRef}
+    <Map
       style={[StyleSheet.absoluteFill, style]}
-      initialRegion={region}
-      mapType={nativeType as any}
-      showsUserLocation={false}
-      showsMyLocationButton={false}
-      showsCompass={false}
-      rotateEnabled
-      pitchEnabled={false}
-      toolbarEnabled={false}
-      onPress={(e) => onMapPress && onMapPress({ lat: e.nativeEvent.coordinate.latitude, lng: e.nativeEvent.coordinate.longitude })}
-      onPanDrag={() => onUserPan && onUserPan()}
+      mapStyle={mapStyle}
+      compass={false}
+      logo={false}
+      attribution={false}
+      onPress={(e: any) => onMapPress && onMapPress({ lat: e.nativeEvent.lngLat[1], lng: e.nativeEvent.lngLat[0] })}
+      onRegionWillChange={(e: any) => e.nativeEvent?.userInteraction && onUserPan && onUserPan()}
       testID="golf-map"
     >
-      {androidTiles && isSat && <UrlTile urlTemplate={ESRI_SAT} maximumZ={19} zIndex={-2} />}
-      {androidTiles && mapType === "hybrid" && <UrlTile urlTemplate={ESRI_REF} maximumZ={19} zIndex={-1} />}
-      {androidTiles && mapType === "map" && <UrlTile urlTemplate={OSM} maximumZ={19} zIndex={-2} />}
+      <Camera ref={cameraRef} initialViewState={{ center: [center.lng, center.lat], zoom }} />
 
       {gpsPath.length > 1 && (
-        <Polyline coordinates={gpsPath.map((p) => ({ latitude: p.lat, longitude: p.lng }))} strokeColor="#0EA5E9" strokeWidth={4} />
+        <GeoJSONSource id="gps-path" data={line(gpsPath.map((p) => ({ lat: p.lat, lng: p.lng })))}>
+          <Layer id="gps-path-line" type="line" source="gps-path" layout={{ "line-cap": "round", "line-join": "round" }} paint={{ "line-color": "#0EA5E9", "line-width": 4 }} />
+        </GeoJSONSource>
       )}
-      {shotLines.map((s, i) => (
-        <Polyline
-          key={`sl-${i}`}
-          coordinates={[
-            { latitude: s.start.lat, longitude: s.start.lng },
-            { latitude: s.end.lat, longitude: s.end.lng },
-          ]}
-          strokeColor={colors.gold}
-          strokeWidth={3}
-        />
-      ))}
+
+      {shotLines.length > 0 && (
+        <GeoJSONSource id="shot-lines" data={shotFeatures}>
+          <Layer id="shot-lines-line" type="line" source="shot-lines" layout={{ "line-cap": "round", "line-join": "round" }} paint={{ "line-color": colors.gold, "line-width": 3 }} />
+        </GeoJSONSource>
+      )}
+
+      {ball && target && (
+        <GeoJSONSource id="aim-line" data={line([ball, target])}>
+          <Layer id="aim-line-line" type="line" source="aim-line" paint={{ "line-color": "#FFFFFF", "line-width": 2.5, "line-dasharray": [2, 3] }} />
+        </GeoJSONSource>
+      )}
+
       {shotLines.map((s, i) =>
         s.label ? (
-          <Marker
-            key={`slm-${i}`}
-            coordinate={{ latitude: (s.start.lat + s.end.lat) / 2, longitude: (s.start.lng + s.end.lng) / 2 }}
-            anchor={{ x: 0.5, y: 0.5 }}
-            tracksViewChanges={track}
-          >
+          <Marker key={`slm-${i}`} lngLat={[(s.start.lng + s.end.lng) / 2, (s.start.lat + s.end.lat) / 2]} anchor="center">
             <View style={[styles.distLabel, { backgroundColor: colors.gold, borderColor: colors.charcoal }]}>
               <Text style={[styles.distLabelTxt, { color: colors.charcoal }]}>{s.label}</Text>
             </View>
@@ -192,23 +172,8 @@ export function GolfMap({
         ) : null
       )}
 
-      {ball && target && (
-        <Polyline
-          coordinates={[
-            { latitude: ball.lat, longitude: ball.lng },
-            { latitude: target.lat, longitude: target.lng },
-          ]}
-          strokeColor="#FFFFFF"
-          strokeWidth={2.5}
-          lineDashPattern={[6, 8]}
-        />
-      )}
       {ball && target && distLabel && (
-        <Marker
-          coordinate={{ latitude: (ball.lat + target.lat) / 2, longitude: (ball.lng + target.lng) / 2 }}
-          anchor={{ x: 0.5, y: 0.5 }}
-          tracksViewChanges={track}
-        >
+        <Marker lngLat={[(ball.lng + target.lng) / 2, (ball.lat + target.lat) / 2]} anchor="center">
           <View style={styles.distLabel}>
             <Text style={styles.distLabelTxt}>{distLabel}</Text>
           </View>
@@ -216,7 +181,7 @@ export function GolfMap({
       )}
 
       {gpsPos && (
-        <Marker coordinate={{ latitude: gpsPos.lat, longitude: gpsPos.lng }} anchor={{ x: 0.5, y: 0.5 }} tracksViewChanges={track} zIndex={50}>
+        <Marker lngLat={[gpsPos.lng, gpsPos.lat]} anchor="center">
           <View style={styles.gpsWrap}>
             {gpsHeading != null && (
               <View style={[styles.gpsArrow, { transform: [{ rotate: `${gpsHeading}deg` }] }]}>
@@ -229,30 +194,24 @@ export function GolfMap({
       )}
 
       {ball && (
-        <Marker coordinate={{ latitude: ball.lat, longitude: ball.lng }} anchor={{ x: 0.5, y: 0.5 }} tracksViewChanges={track} zIndex={40}>
+        <Marker lngLat={[ball.lng, ball.lat]} anchor="center">
           <View style={styles.ballMk} />
         </Marker>
       )}
 
       {tee && (
-        <Marker coordinate={{ latitude: tee.lat, longitude: tee.lng }} anchor={{ x: 0.5, y: 0.5 }} tracksViewChanges={track}>
+        <Marker lngLat={[tee.lng, tee.lat]} anchor="center">
           <View style={styles.tee}>
             <Text style={styles.teeTxt}>T</Text>
           </View>
         </Marker>
       )}
-      {greens?.greenFront && <GreenPin coord={greens.greenFront} label="F" track={track} />}
-      {greens?.greenCenter && <GreenPin coord={greens.greenCenter} label="C" track={track} />}
-      {greens?.greenBack && <GreenPin coord={greens.greenBack} label="B" track={track} />}
+      {greens?.greenFront && <GreenPin coord={greens.greenFront} label="F" />}
+      {greens?.greenCenter && <GreenPin coord={greens.greenCenter} label="C" />}
+      {greens?.greenBack && <GreenPin coord={greens.greenBack} label="B" />}
 
       {hazards.map((h) => (
-        <Marker
-          key={h.id}
-          coordinate={{ latitude: h.lat, longitude: h.lng }}
-          anchor={{ x: 0.5, y: 0.5 }}
-          tracksViewChanges={track}
-          onPress={() => onHazardPress && onHazardPress(h)}
-        >
+        <Marker key={h.id} lngLat={[h.lng, h.lat]} anchor="center" onPress={() => onHazardPress && onHazardPress(h)}>
           <View style={[styles.hazard, { backgroundColor: HAZARD_COLORS[h.type] || "#fff" }]}>
             <Text style={styles.hazardTxt}>{h.type === "WATER" ? "W" : h.type === "BUNKER" ? "B" : h.type[0]}</Text>
           </View>
@@ -260,14 +219,7 @@ export function GolfMap({
       ))}
 
       {target && (
-        <Marker
-          coordinate={{ latitude: target.lat, longitude: target.lng }}
-          anchor={{ x: 0.2, y: 1 }}
-          draggable
-          tracksViewChanges={track}
-          onDragEnd={(e) => onTargetDrag && onTargetDrag({ lat: e.nativeEvent.coordinate.latitude, lng: e.nativeEvent.coordinate.longitude })}
-          zIndex={60}
-        >
+        <Marker lngLat={[target.lng, target.lat]} anchor="bottom">
           <View style={styles.flag}>
             <View style={styles.flagPole} />
             <View style={styles.flagCloth} />
@@ -275,13 +227,13 @@ export function GolfMap({
           </View>
         </Marker>
       )}
-    </MapView>
+    </Map>
   );
 }
 
-function GreenPin({ coord, label, track }: { coord: LatLng; label: string; track: boolean }) {
+function GreenPin({ coord, label }: { coord: LatLng; label: string }) {
   return (
-    <Marker coordinate={{ latitude: coord.lat, longitude: coord.lng }} anchor={{ x: 0.5, y: 0.5 }} tracksViewChanges={track}>
+    <Marker lngLat={[coord.lng, coord.lat]} anchor="center">
       <View style={styles.green}>
         <Text style={styles.greenTxt}>{label}</Text>
       </View>
@@ -290,9 +242,6 @@ function GreenPin({ coord, label, track }: { coord: LatLng; label: string; track
 }
 
 const styles = StyleSheet.create({
-  webFallback: { backgroundColor: "#0a1f12", alignItems: "center", justifyContent: "center" },
-  webTxt: { color: "rgba(255,255,255,0.7)", fontSize: 16, fontWeight: "800" },
-  webSub: { color: "rgba(255,255,255,0.4)", fontSize: 12, marginTop: 4 },
   distLabel: {
     backgroundColor: colors.charcoal,
     borderColor: "#fff",

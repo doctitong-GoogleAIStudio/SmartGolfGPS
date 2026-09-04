@@ -14,7 +14,9 @@
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "Smart Golf GPS uses your location to measure live distances to the green and track your shots on the course.",
         "NSLocationAlwaysAndWhenInUseUsageDescription": "Allow background location so the app keeps tracking your walk and shots while your phone is in your pocket during a round.",
-        "UIBackgroundModes": ["location"]
+        "UIBackgroundModes": [
+          "location"
+        ]
       }
     },
     "android": {
@@ -57,7 +59,8 @@
           "backgroundColor": "#000000"
         }
       ],
-      "expo-mail-composer"
+      "expo-mail-composer",
+      "@maplibre/maplibre-react-native"
     ],
     "experiments": {
       "typedRoutes": true

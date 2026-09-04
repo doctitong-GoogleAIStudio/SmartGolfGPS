@@ -4,6 +4,7 @@ import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Location from "expo-location";
 import { Ionicons } from "@expo/vector-icons";
+import { Image } from "expo-image";
 import { colors, font } from "@/src/theme";
 import { api } from "@/src/lib/api";
 import { haversineMeters } from "@/src/lib/geo";
@@ -18,6 +19,22 @@ const RECENT_KEY = "sg_recent_courses";
 type Entry = { name: string; location: string; region: string; latitude: number; longitude: number; holeCount: number };
 
 const BADGE_COLORS = ["#14532D", "#166534", "#0E7490", "#3F6212", "#115E59", "#1E3A8A", "#7C2D12"];
+const PHOTOS = [
+  "https://images.unsplash.com/photo-1763917379121-91130139aca0?crop=entropy&cs=srgb&fm=jpg&q=80&w=640&ixlib=rb-4.1.0",
+  "https://images.unsplash.com/photo-1785016680819-eb4bf6e0b1c8?crop=entropy&cs=srgb&fm=jpg&q=80&w=640&ixlib=rb-4.1.0",
+  "https://images.unsplash.com/photo-1605144156546-91acf5e4cffd?crop=entropy&cs=srgb&fm=jpg&q=80&w=640&ixlib=rb-4.1.0",
+  "https://images.unsplash.com/photo-1605144156683-5ebde77feed5?crop=entropy&cs=srgb&fm=jpg&q=80&w=640&ixlib=rb-4.1.0",
+  "https://images.unsplash.com/photo-1629596545782-775f0792dbc8?crop=entropy&cs=srgb&fm=jpg&q=80&w=640&ixlib=rb-4.1.0",
+  "https://images.unsplash.com/photo-1785638163680-20c2a93fe676?crop=entropy&cs=srgb&fm=jpg&q=80&w=640&ixlib=rb-4.1.0",
+];
+function nameHash(name: string) {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
+  return h;
+}
+function photoFor(name: string) {
+  return PHOTOS[nameHash(name) % PHOTOS.length];
+}
 function initials(name: string) {
   const words = name.replace(/[&/().]/g, " ").split(/\s+/).filter((w) => w.length > 1 && !/^(the|de|del|and|golf|club|country)$/i.test(w));
   const pick = words.length ? words : name.split(/\s+/);
@@ -57,8 +74,8 @@ export default function PhCourses() {
 
   useEffect(() => {
     api.get("/courses/directory").then(setList).catch(() => toast.error("Could not load directory"));
-    storage.getItem<Entry[]>(RECENT_KEY, []).then((r) => {
-      const rr = r || [];
+    storage.getItem<string>(RECENT_KEY, "").then((raw) => {
+      const rr: Entry[] = raw ? JSON.parse(raw) : [];
       setRecent(rr);
       setAdded(Object.fromEntries(rr.map((c) => [c.name, true])));
     });
@@ -96,6 +113,12 @@ export default function PhCourses() {
     return seen;
   }, [list]);
 
+  const counts = useMemo(() => {
+    const c: Record<string, number> = {};
+    for (const x of list) c[x.region] = (c[x.region] || 0) + 1;
+    return c;
+  }, [list]);
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return list.filter((c) => {
@@ -125,7 +148,7 @@ export default function PhCourses() {
       setAdded((a) => ({ ...a, [c.name]: true }));
       setRecent((prev) => {
         const next = [c, ...prev.filter((r) => r.name !== c.name)].slice(0, 12);
-        storage.setItem(RECENT_KEY, next);
+        storage.setItem(RECENT_KEY, JSON.stringify(next));
         return next;
       });
       toast.success(`Added "${c.name}"`, "Par-72 layout ready. Map holes in the editor or on-site.");
@@ -141,28 +164,32 @@ export default function PhCourses() {
     const distKm = userPos ? (haversineMeters(userPos, { lat: c.latitude, lng: c.longitude }) as number) : null;
     return (
       <View style={styles.card} testID={`ph-course-${id}`}>
-        <View style={[styles.badge, { backgroundColor: badgeColor(c.name) }]}>
-          <Text style={styles.badgeTxt}>{initials(c.name)}</Text>
-          <View style={styles.badgeFlag}>
-            <Ionicons name="flag" size={9} color={colors.gold} />
+        <View style={styles.photoWrap}>
+          <Image source={{ uri: photoFor(c.name) }} style={StyleSheet.absoluteFill} contentFit="cover" transition={250} testID={`ph-photo-${id}`} />
+          <View style={styles.photoShade} />
+          <View style={styles.holesChip}>
+            <Ionicons name="flag" size={10} color={colors.gold} />
+            <Text style={styles.holesChipTxt}>{c.holeCount}</Text>
           </View>
+          <Text style={styles.photoName} numberOfLines={2}>{c.name}</Text>
         </View>
-        <View style={{ flex: 1, paddingHorizontal: 12 }}>
-          <Text style={styles.name} numberOfLines={1}>{c.name}</Text>
-          <Text style={styles.meta} numberOfLines={1}>
-            {c.location} · {c.holeCount} holes{distKm != null ? `  ·  ${fmtDistance(distKm)}` : ""}
-          </Text>
+        <View style={styles.cardBody}>
+          <View style={{ flex: 1, paddingRight: 12 }}>
+            <Text style={styles.meta} numberOfLines={1}>
+              {c.location}{distKm != null ? `  ·  ${fmtDistance(distKm)}` : ""}
+            </Text>
+          </View>
+          <Pressable testID={`ph-add-${id}`} disabled={isAdded || busy === c.name} onPress={() => addCourse(c)} style={[styles.addBtn, isAdded ? styles.addedBtn : null]}>
+            {busy === c.name ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <>
+                <Ionicons name={isAdded ? "checkmark" : "add"} size={16} color={isAdded ? colors.green : "#fff"} />
+                <Text style={[styles.addTxt, isAdded && { color: colors.green }]}>{isAdded ? "ADDED" : "ADD"}</Text>
+              </>
+            )}
+          </Pressable>
         </View>
-        <Pressable testID={`ph-add-${id}`} disabled={isAdded || busy === c.name} onPress={() => addCourse(c)} style={[styles.addBtn, isAdded ? styles.addedBtn : null]}>
-          {busy === c.name ? (
-            <ActivityIndicator size="small" color="#fff" />
-          ) : (
-            <>
-              <Ionicons name={isAdded ? "checkmark" : "add"} size={16} color={isAdded ? colors.green : "#fff"} />
-              <Text style={[styles.addTxt, isAdded && { color: colors.green }]}>{isAdded ? "ADDED" : "ADD"}</Text>
-            </>
-          )}
-        </Pressable>
       </View>
     );
   };
@@ -211,10 +238,12 @@ export default function PhCourses() {
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipsScroll} contentContainerStyle={styles.chipsContent} testID="ph-region-chips">
         <Pressable testID="ph-region-all" onPress={() => setRegionFilter("")} style={[styles.regionChip, regionFilter === "" && styles.regionChipOn]}>
           <Text style={[styles.regionChipTxt, regionFilter === "" && { color: "#fff" }]}>All</Text>
+          <Text style={[styles.regionChipCount, regionFilter === "" && styles.regionChipCountOn]}>{list.length}</Text>
         </Pressable>
         {regions.map((r) => (
           <Pressable key={r} testID={`ph-region-${r.replace(/[^a-z0-9]/gi, "-").toLowerCase()}`} onPress={() => setRegionFilter(r === regionFilter ? "" : r)} style={[styles.regionChip, regionFilter === r && styles.regionChipOn]}>
             <Text style={[styles.regionChipTxt, regionFilter === r && { color: "#fff" }]}>{r}</Text>
+            <Text style={[styles.regionChipCount, regionFilter === r && styles.regionChipCountOn]}>{counts[r] || 0}</Text>
           </Pressable>
         ))}
       </ScrollView>
@@ -293,9 +322,11 @@ const styles = StyleSheet.create({
   sortChipTxt: { fontSize: 11, fontWeight: "900", color: colors.zinc500, letterSpacing: 0.5 },
   chipsScroll: { flexGrow: 0, flexShrink: 0, marginTop: 12 },
   chipsContent: { paddingHorizontal: 16, gap: 8, alignItems: "center", paddingVertical: 2 },
-  regionChip: { height: 34, paddingHorizontal: 14, borderRadius: 10, backgroundColor: colors.zinc100, alignItems: "center", justifyContent: "center", flexShrink: 0 },
+  regionChip: { flexDirection: "row", alignItems: "center", gap: 6, height: 34, paddingHorizontal: 14, borderRadius: 10, backgroundColor: colors.zinc100, justifyContent: "center", flexShrink: 0 },
   regionChipOn: { backgroundColor: colors.charcoal },
   regionChipTxt: { fontSize: 12, fontWeight: "800", color: colors.zinc500 },
+  regionChipCount: { fontSize: 11, fontWeight: "900", color: colors.zinc400, backgroundColor: "rgba(0,0,0,0.06)", minWidth: 20, textAlign: "center", paddingHorizontal: 5, paddingVertical: 1, borderRadius: 7, overflow: "hidden" },
+  regionChipCountOn: { color: "#fff", backgroundColor: "rgba(255,255,255,0.18)" },
   recentCard: { width: 116, backgroundColor: "#fff", borderWidth: 1, borderColor: colors.zinc200, borderRadius: 14, padding: 10, alignItems: "center", gap: 6 },
   recentBadge: { width: 40, height: 40, borderRadius: 10, alignItems: "center", justifyContent: "center" },
   recentName: { fontSize: 11, fontWeight: "800", color: colors.charcoal, textAlign: "center" },
@@ -304,7 +335,13 @@ const styles = StyleSheet.create({
   viewBtnOn: { backgroundColor: colors.green },
   selCard: { position: "absolute", left: 16, right: 16, flexDirection: "row", alignItems: "center", backgroundColor: "#fff", borderRadius: 16, padding: 12, shadowColor: "#000", shadowOpacity: 0.25, shadowRadius: 12, elevation: 8 },
   region: { fontSize: 11, letterSpacing: 1.5, fontWeight: "800", color: colors.gold, marginTop: 10 },
-  card: { flexDirection: "row", alignItems: "center", backgroundColor: "#fff", borderWidth: 1, borderColor: colors.zinc200, borderRadius: 16, paddingHorizontal: 12, paddingVertical: 12 },
+  card: { backgroundColor: "#fff", borderWidth: 1, borderColor: colors.zinc200, borderRadius: 16, overflow: "hidden" },
+  photoWrap: { height: 108, backgroundColor: colors.charcoal, justifyContent: "flex-end" },
+  photoShade: { position: "absolute", left: 0, right: 0, bottom: 0, height: 64, backgroundColor: "rgba(0,0,0,0.42)" },
+  holesChip: { position: "absolute", top: 8, right: 8, flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "rgba(0,0,0,0.55)", paddingHorizontal: 8, height: 22, borderRadius: 11 },
+  holesChipTxt: { color: "#fff", fontWeight: "900", fontSize: 11 },
+  photoName: { color: "#fff", fontWeight: "900", fontSize: 15, paddingHorizontal: 12, paddingBottom: 10, textShadowColor: "rgba(0,0,0,0.6)", textShadowRadius: 4 },
+  cardBody: { flexDirection: "row", alignItems: "center", paddingHorizontal: 12, paddingVertical: 10 },
   badge: { width: 44, height: 44, borderRadius: 12, alignItems: "center", justifyContent: "center" },
   badgeTxt: { color: "#fff", fontWeight: "900", fontSize: 15, letterSpacing: 0.5 },
   badgeFlag: { position: "absolute", right: -3, bottom: -3, width: 16, height: 16, borderRadius: 8, backgroundColor: colors.charcoal, alignItems: "center", justifyContent: "center" },

@@ -1,0 +1,34 @@
+{
+  "summary": "Mobile-only frontend regression after the MapLibre migration (react-native-maps uninstalled, GolfMap.tsx + DirectoryMap.tsx rewritten with @maplibre/maplibre-react-native@11.3.8; web preview intentionally resolves to .web.tsx stubs). Ran a single Playwright pass on the Expo web preview at 390x844 covering all 6 requested scenarios. RESULT: 6/6 PASS, zero pageerror / zero console errors. (1) App still loads on web (home renders SMART GOLF GPS + trial banner + all nav CTAs). (2) /start-round loads courses (Apo Highlands Demo, Southpacific, Manila Golf) and testids present (start-course-*, start-holes-9/18, start-player-input, start-round-btn); tapping start-round-btn navigates to /play WITHOUT a JS bundle crash. (3) /play mounts fine: golf-map stub renders 'Satellite map — Live map renders on the mobile app'; distance-card=350 M / CENTER / PLAYS LIKE 347, fcb-strip 336/350/364, top bar (rf-home-btn/rf-prev-hole-btn/rf-hole-label='HOLE 1 · PAR 4'/rf-next-hole-btn), action bar (set-ball-here-btn, use-my-location-btn/gps, track-shot-btn), SMART CADDIE strip 'DRIVER · 230 yd · LOW', and bottom nav (nav-map/score/caddie/bag/more) all rendered. (4) /ph-courses region chips: single horizontal scroller (ph-region-chips) with numeric count badges — All=98, Metro Manila=10, Cavite/Laguna=14, Rizal=6, Tagaytay=4, Batangas=5, Central Luzon=13, Northern Luzon=10, Bicol=2, Visayas=15, Mindanao=18, Palawan=1 (all values match the spec). Tapping ph-region-mindanao filters the ph-add-* list from 98 -> 18 cards. (5) RECENTLY ADDED: tapping ph-add-manila-golf---country-club (was ADD, became ADDED) rendered the ph-recent-section with badge 'M' + 'Manila Golf & Country Club'. After page.reload(), the section STILL rendered with the same entry — AsyncStorage persistence via sg_recent_courses works on web. (6) Directory MAP toggle: ph-view-map click rendered the directory-map web stub 'Course map — The pin map opens on the mobile app' with no crash and no red-screen. No new deprecated packages introduced; @maplibre/maplibre-react-native is not on the deprecated list. Prior known bug from iteration_4 (Play.tsx roundScores stale-cache during putt-prompt save) was NOT re-tested and is still open per that report.",
+  "platforms_tested": ["mobile"],
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "mobile": {
+      "ui_bugs": [],
+      "integration_issues": [],
+      "design_issues": [],
+      "react_native_issues": []
+    }
+  },
+  "parity_issues": [],
+  "test_report_links": ["/app/test_reports/iteration_5.json"],
+  "action_items": [
+    "No action required for the MapLibre migration on the web preview — all 6 requested scenarios pass and the two .web.tsx stubs render as expected (no live map is intentional on web).",
+    "Still open from iteration_4 (not re-tested this run): Play.tsx roundScores stale-cache — Auto Putt Prompt Save clobbers Score-tab edits and next-hole trigger misses. See iteration_4.json action_items."
+  ],
+  "critical_code_review_comments": [
+    "GolfMap.tsx L134-144: relies on onRegionWillChange for onUserPan; MapLibre RN v11 uses onCameraChanged with isUserInteraction — verify on a real device that user-pan actually disables auto-follow, otherwise the follow-camera will fight the user's fingers.",
+    "GolfMap.tsx L101-115: recenterKey and followPos both call cameraRef.easeTo without waiting for the previous animation to finish; when both fire in the same tick (e.g. GPS update while user just recentered) the later call wins silently. Consider guarding with a ref of the last requested center and skipping if identical.",
+    "GolfMap.tsx L145: <Camera initialViewState> is only read once. If the parent's `center` prop changes (e.g. user picks a different course) before a recenterKey bump, the camera does NOT follow. On real device this could leave the map on the previous course; add a center-change effect (`easeTo` when center prop deep-changes and no follow is active).",
+    "DirectoryMap.tsx L19-29: fitBounds inside a 400ms setTimeout keyed on `courses.length` — if the length is unchanged but the identities change (e.g. same count in a different region filter), the map will not refit. Key on a stable hash of coords, not just length.",
+    "MapLibre style objects are declared as `any` in both files. Tightening to the MapLibre StyleSpecification type would catch tile-URL typos at compile time."
+  ],
+  "updated_files": ["/app/test_reports/iteration_5.json"],
+  "success_rate": {"backend": "N/A (skipped per request)", "frontend": "100% (6/6 requested mobile-web scenarios)"},
+  "test_credentials": "Not required (no auth in the tested flows).",
+  "seed_data_creation": "None. Test added one recently-added entry via the UI (Manila Golf & Country Club) into AsyncStorage sg_recent_courses; benign, cleared on next storage clear.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "MapLibre migration verified only via the Expo WEB preview which resolves to .web.tsx stubs — the live MapLibre native surface (raster tiles + markers + camera easeTo) has NOT been exercised on a real device from this environment. If iteration bumps to a device build, prioritize: (a) tile load from server.arcgisonline.com works with no key; (b) markers (ball/tee/greenFront/Center/Back/hazards/target) render at correct coords; (c) recenterKey + followPos + flyoverKey camera transitions; (d) onMapPress lngLat[1]/lngLat[0] mapping (lat/lng order) matches expectations; (e) DirectoryMap.fitBounds actually frames all courses. Also re-test the iteration_4 open bug (Play.tsx roundScores staleness during putt-prompt save).",
+  "rca of the issue": "N/A — no new bug found this iteration."
+}
