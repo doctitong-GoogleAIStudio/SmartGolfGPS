@@ -1,6 +1,6 @@
-import React, { useEffect, useMemo, useRef } from "react";
-import { View, Text, StyleSheet } from "react-native";
-import { Map, Camera, Marker, GeoJSONSource, Layer, type CameraRef } from "@maplibre/maplibre-react-native";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { View, Text, StyleSheet, PanResponder } from "react-native";
+import { Map, Camera, Marker, GeoJSONSource, Layer, type CameraRef, type MapRef } from "@maplibre/maplibre-react-native";
 import { colors, font } from "@/src/theme";
 import { LatLng, bearingDeg } from "@/src/lib/geo";
 
@@ -82,6 +82,7 @@ export function GolfMap({
   gpsPos,
   gpsHeading,
   target,
+  onTargetDrag,
   tee,
   greens,
   hazards = [],
@@ -96,6 +97,7 @@ export function GolfMap({
   style,
 }: Props) {
   const cameraRef = useRef<CameraRef>(null);
+  const mapRef = useRef<MapRef>(null);
   const mapStyle = useMemo(() => buildStyle(mapType), [mapType]);
 
   useEffect(() => {
@@ -133,6 +135,7 @@ export function GolfMap({
 
   return (
     <Map
+      ref={mapRef}
       style={[StyleSheet.absoluteFill, style]}
       mapStyle={mapStyle}
       compass={false}
@@ -218,16 +221,53 @@ export function GolfMap({
         </Marker>
       ))}
 
-      {target && (
-        <Marker lngLat={[target.lng, target.lat]} anchor="bottom">
-          <View style={styles.flag}>
-            <View style={styles.flagPole} />
-            <View style={styles.flagCloth} />
-            <View style={styles.flagBase} />
-          </View>
-        </Marker>
-      )}
+      {target && <DraggableFlag mapRef={mapRef} target={target} onTargetDrag={onTargetDrag} />}
     </Map>
+  );
+}
+
+function DraggableFlag({
+  mapRef,
+  target,
+  onTargetDrag,
+}: {
+  mapRef: React.RefObject<MapRef | null>;
+  target: LatLng;
+  onTargetDrag?: (p: LatLng) => void;
+}) {
+  const [d, setD] = useState({ x: 0, y: 0 });
+  const targetRef = useRef(target);
+  targetRef.current = target;
+  const cbRef = useRef(onTargetDrag);
+  cbRef.current = onTargetDrag;
+  const pan = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_e, g) => Math.abs(g.dx) > 2 || Math.abs(g.dy) > 2,
+      onPanResponderMove: (_e, g) => setD({ x: g.dx, y: g.dy }),
+      onPanResponderRelease: async (_e, g) => {
+        const t = targetRef.current;
+        try {
+          const base = await mapRef.current?.project([t.lng, t.lat]);
+          if (base) {
+            const np = await mapRef.current?.unproject([base[0] + g.dx, base[1] + g.dy]);
+            if (np) cbRef.current?.({ lng: np[0], lat: np[1] });
+          }
+        } catch {
+          // ignore projection errors
+        }
+        setD({ x: 0, y: 0 });
+      },
+    }),
+  ).current;
+  return (
+    <Marker lngLat={[target.lng, target.lat]} anchor="bottom">
+      <View {...pan.panHandlers} style={[styles.flag, { transform: [{ translateX: d.x }, { translateY: d.y }] }]}>
+        <View style={styles.flagPole} />
+        <View style={styles.flagCloth} />
+        <View style={styles.flagBase} />
+      </View>
+    </Marker>
   );
 }
 

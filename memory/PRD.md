@@ -100,5 +100,11 @@ iteration_3 (mobile enhancements): 4/4 PASS (GCash QR, Weather On Card, Voice Ca
 - IMPORTANT: this crash fix can ONLY be validated in a real device build (Publish) — the Expo web preview & Expo Go resolve to the .web.tsx stubs and cannot render/verify native MapLibre. Web-preview regression passed 6/6 (iteration_5.json).
 
 ## Notes for next agent
+
+### Drag The Pin + Offline Tiles (2026-06) [native-only]
+- Drag The Pin: GolfMap.tsx target flag is now draggable (DraggableFlag: PanResponder translates the flag while dragging, then mapRef.project→unproject converts the release pixel to lng/lat and calls onTargetDrag). Tap-on-map still moves the target too.
+- Offline Tiles: My Courses cards (app/courses/index.tsx) have a DOWNLOAD OFFLINE MAP row → MapLibre OfflineManager pre-downloads Esri satellite tiles (~2.2km box, zoom 12–17) with live %, a "ready · tap to remove" state, and delete. Native logic in src/lib/offline.ts; src/lib/offline.web.ts stub keeps it a no-op/hidden on web (offlineSupported=false). Download uses a single resolve/reject promise channel (no double-toast); guarded against mid-download re-tap and unmount setState.
+- BOTH are native-only — cannot be validated on web/Expo Go. Web-preview regression passed 5/5 (iteration_6.json). Verify on a device build (Publish).
+- Backlog (from iteration code review, not yet done): offline bounds from actual hole coords for long links courses; disk-quota preflight; cancel in-flight download. Also still-open iteration_4 bug: Play.tsx roundScores staleness (auto putt prompt can clobber Score-tab edits).
 - Frontend GPS testing: grant geolocation + set_geolocation(7.0545, 125.5195) before nav; viewport 390x844
 - Settings singleton id="default"; demo course id "demo-apo-davao" — do not delete

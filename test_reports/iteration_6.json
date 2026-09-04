@@ -1,0 +1,34 @@
+{
+  "summary": "Mobile-only frontend regression after adding two native-only features (Drag The Pin in GolfMap.tsx via PanResponder + Offline Tiles via MapLibre OfflineManager isolated behind offline.ts / offline.web.ts stub). Ran a single Playwright pass on the Expo web preview at 390x844 covering all 5 requested regression scenarios. RESULT: 5/5 PASS, zero pageerror, zero console.error across /, /courses, /play, /ph-courses. Bundle still compiles clean after PanResponder + offline imports were added. (1) Home renders 'SMART GOLF'. (2) /courses shows NEW COURSE / IMPORT / BROWSE PHILIPPINE COURSES; 4 course cards each with PLAY/EDIT/SHARE/DELETE; the DOWNLOAD OFFLINE MAP row is CORRECTLY HIDDEN on web (course-offline-* count = 0) — this is expected because offline.web.ts sets offlineSupported=false and the courses screen guards the row with `offlineSupported && (...)`. (3) /play mounts the rangefinder without crashing — rangefinder-screen, golf-map (web stub), distance-card, set-ball-here-btn, and track-shot-btn all visible. The new onTargetDrag prop wired to GolfMap does not affect the web stub. (4) /ph-courses region chips render with count 'All 98', search input works, screen loads clean. (5) Zero JS/bundle errors — 0 pageerror, 0 console.error. No white/red screens on any route. No new deprecated packages introduced (@maplibre/maplibre-react-native is not on the deprecated list; PanResponder is core RN and not deprecated).",
+  "platforms_tested": ["mobile"],
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "mobile": {
+      "ui_bugs": [],
+      "integration_issues": [],
+      "design_issues": [],
+      "react_native_issues": []
+    }
+  },
+  "parity_issues": [],
+  "test_report_links": ["/app/test_reports/iteration_6.json"],
+  "action_items": [
+    "No regressions from the Drag-The-Pin + Offline-Tiles addition on the Expo web preview. Both features are native-only and correctly no-op on web (offlineSupported=false hides the DOWNLOAD OFFLINE MAP row; PanResponder-based DraggableFlag is in the .native GolfMap.tsx which the web bundle does not import). Ship as-is on web; validate the real drag + real tile download on a device build.",
+    "Still open from iteration_4 (not re-tested this run — outside this run's scope): Play.tsx roundScores stale-cache — putt-prompt save may clobber Score-tab edits."
+  ],
+  "critical_code_review_comments": [
+    "offline.ts L36: OfflineManager.createPack progress callback fires onProgress with `-1` on error, but the try/catch in courses/index.tsx also runs the catch handler — a single failure can now delete the same dlProgress entry twice and toast twice. Consider making the error path use only reject (not the progress channel), or dedupe by checking prev state.",
+    "offline.ts L34: hard-coded ~2.2 km bounding box (d=0.02) is fine for compact courses but will UNDER-download for long links courses (e.g. some 18-hole layouts span > 3km end-to-end). Consider computing bounds from actual hole tee/green coords if the course is mapped, falling back to the box otherwise.",
+    "courses/index.tsx L33: guard `dlProgress[c.id] != null && dlProgress[c.id] >= 0 && dlProgress[c.id] < 100` returns silently if the user re-taps mid-download — a small toast.info('Download in progress') would be a better UX than a dead tap.",
+    "courses/index.tsx L47-59: no cancellation path — the user cannot abort an in-flight download; OfflineManager.createPack has no returned handle here. If the user leaves the screen mid-download the progress callback keeps firing into a stale setState. Wrap with an isMounted / abort ref.",
+    "offline.ts: no disk-quota check before starting createPack — MapLibre will happily fill device storage. Consider a pre-flight estimate or a soft cap on concurrent packs."
+  ],
+  "updated_files": ["/app/test_reports/iteration_6.json"],
+  "success_rate": {"backend": "N/A (skipped per request)", "frontend": "100% (5/5 requested mobile-web regression scenarios)"},
+  "test_credentials": "Not required (no auth in the tested flows).",
+  "seed_data_creation": "None.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "The two native-only additions (PanResponder DraggableFlag + MapLibre OfflineManager pack download) have NOT been exercised — the Expo web preview intentionally resolves GolfMap to .web.tsx and offline to .web.ts (offlineSupported=false). On a device build, prioritize: (a) DraggableFlag: PanResponder captures the touch, unproject/project math translates screen dx/dy to lat/lng correctly at multiple zooms, onTargetDrag fires with reasonable throttling, target marker doesn't glitch at map edges; (b) Offline: OfflineManager.createPack progress ticks from 0->100, `ready · tap to remove` state persists across app restart (listOfflineCourseIds re-reads packs), delete confirmation actually removes disk tiles, error path (airplane mode) triggers toast.error via the pct<0 signal, no double-toast when both progress-error and try/catch fire, storage doesn't grow unbounded. Also still open from iteration_4: Play.tsx roundScores staleness during putt-prompt save.",
+  "rca of the issue": "N/A — no new bug found this iteration; regression clean."
+}

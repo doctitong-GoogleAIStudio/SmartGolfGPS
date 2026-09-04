@@ -10,6 +10,7 @@ import { api, cachedGet } from "@/src/lib/api";
 import { storage } from "@/src/utils/storage";
 import { ScreenHeader } from "@/src/components/ui";
 import { toast } from "@/src/lib/toast";
+import { offlineSupported, listOfflineCourseIds, downloadCourseTiles, deleteCourseTiles } from "@/src/lib/offline";
 
 export default function Courses() {
   const router = useRouter();
@@ -19,9 +20,47 @@ export default function Courses() {
   const [form, setForm] = useState({ name: "", location: "", holeCount: 18 });
   const [showImport, setShowImport] = useState(false);
   const [importCode, setImportCode] = useState("");
+  const [offlineIds, setOfflineIds] = useState<Set<string>>(new Set());
+  const [dlProgress, setDlProgress] = useState<Record<string, number>>({});
+  const mountedRef = React.useRef(true);
 
   const load = () => cachedGet<any[]>("/courses", "courses").then(setCourses).catch(() => {});
-  useFocusEffect(useCallback(() => { load(); }, []));
+  useFocusEffect(useCallback(() => {
+    mountedRef.current = true;
+    load();
+    if (offlineSupported) listOfflineCourseIds().then((ids) => setOfflineIds(new Set(ids))).catch(() => {});
+    return () => { mountedRef.current = false; };
+  }, []));
+
+  const toggleOffline = async (c: any) => {
+    const p = dlProgress[c.id];
+    if (p != null && p >= 0 && p < 100) { toast.info("Download in progress", "Hang tight — tiles are still saving."); return; }
+    if (offlineIds.has(c.id)) {
+      Alert.alert("Remove offline map?", `Delete the downloaded satellite tiles for "${c.name}"?`, [
+        { text: "Cancel", style: "cancel" },
+        { text: "Remove", style: "destructive", onPress: async () => {
+          await deleteCourseTiles(c.id);
+          setOfflineIds((s) => { const n = new Set(s); n.delete(c.id); return n; });
+          toast.success("Offline map removed");
+        } },
+      ]);
+      return;
+    }
+    setDlProgress((prev) => ({ ...prev, [c.id]: 0 }));
+    try {
+      await downloadCourseTiles(c.id, c.name, c.latitude, c.longitude, (pct) => {
+        if (mountedRef.current) setDlProgress((prev) => ({ ...prev, [c.id]: pct }));
+      });
+      if (!mountedRef.current) return;
+      setOfflineIds((s) => new Set(s).add(c.id));
+      setDlProgress((prev) => { const n = { ...prev }; delete n[c.id]; return n; });
+      toast.success(`"${c.name}" saved for offline play`);
+    } catch (e: any) {
+      if (!mountedRef.current) return;
+      setDlProgress((prev) => { const n = { ...prev }; delete n[c.id]; return n; });
+      toast.error(e?.message || "Could not download offline map");
+    }
+  };
 
   const share = async (id: string) => {
     try {
@@ -111,6 +150,19 @@ export default function Courses() {
                 <Ionicons name="trash" size={16} color={colors.red} />
               </Pressable>
             </View>
+            {offlineSupported && (() => {
+              const done = offlineIds.has(c.id);
+              const pct = dlProgress[c.id];
+              const busy = pct != null && pct >= 0 && pct < 100;
+              return (
+                <Pressable style={[styles.offlineRow, done && styles.offlineRowDone]} testID={`course-offline-${c.id}`} onPress={() => toggleOffline(c)}>
+                  <Ionicons name={done ? "cloud-done" : busy ? "cloud-download" : "cloud-download-outline"} size={16} color={done ? colors.green : busy ? colors.gold : colors.zinc500} />
+                  <Text style={[styles.offlineTxt, { color: done ? colors.green : busy ? colors.charcoal : colors.zinc500 }]}>
+                    {done ? "OFFLINE MAP READY · TAP TO REMOVE" : busy ? `DOWNLOADING… ${pct}%` : "DOWNLOAD OFFLINE MAP"}
+                  </Text>
+                </Pressable>
+              );
+            })()}
           </View>
         ))}
       </ScrollView>
@@ -177,6 +229,9 @@ const styles = StyleSheet.create({
   editBtn: { height: 44, paddingHorizontal: 16, borderRadius: 12, backgroundColor: colors.zinc100, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 },
   editTxt: { fontSize: 12, fontWeight: "900", color: colors.charcoal },
   delBtn: { height: 44, width: 44, borderRadius: 12, backgroundColor: "#FEE2E2", alignItems: "center", justifyContent: "center" },
+  offlineRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: colors.zinc100 },
+  offlineRowDone: {},
+  offlineTxt: { fontSize: 11, fontWeight: "900", letterSpacing: 0.5 },
   backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.7)", justifyContent: "flex-end" },
   sheet: { backgroundColor: "#fff", borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 24, gap: 12 },
   sheetTitle: { fontSize: 20, fontWeight: "800", color: colors.charcoal },
