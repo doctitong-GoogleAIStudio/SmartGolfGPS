@@ -164,3 +164,10 @@ iteration_3 (mobile enhancements): 4/4 PASS (GCash QR, Weather On Card, Voice Ca
 - Trend Range (trends.tsx): LAST 5 / LAST 10 / ALL chips (trend-range-5/10/all), default ALL. Bars refactored to take rounds[] + value extractor; each bar is a Pressable (testID trend-{title}-bar-{i}) that opens /rounds/{id}. Backend /stats now returns recentRounds[:50] (was [:10]) so ALL is meaningful.
 - Verified on Expo web preview (iteration_13.json) — all 3 features pass, no critical issues. Auto-advance verified by code review (GPS trigger can't fire on web).
 - Backlog carried over: merge nearGreenRef+advNearGreenRef; add nextHole.tee proximity check so advance isn't offered while walking to clubhouse; edit.tsx setMode() should clear active draft when switching modes.
+
+### Universal simulated course layouts (2026-06)
+- Problem: only the Apo demo had per-hole tee/green coords + POIs. Directory-imported courses (PH_COURSES) had a city-level pin only → empty "COURSE NAVIGATION" panel and no hole-19 features on those courses.
+- Fix (backend/server.py): added generic build_layout(base_lat, base_lng, n, pars, hcps) + default_pars/default_hcps helpers that synthesise tees, F/C/B greens, a greenside bunker (+ fairway water on par-5s) and the 4 POIs (clubhouse/drivingRange/practiceGreen/parking) around the course pin — same technique as the Apo demo. Simulated, not surveyed.
+- POST /courses now auto-applies build_layout when a new course has no mapped tee. Startup seed() backfills every non-demo course lacking tee coords (never overwrites a course a mapper already drew — guarded by `any(h.tee)`).
+- Result: Course Navigation (Hole 1 Tee, Clubhouse, Driving Range, Practice Green, Parking) and all per-hole features now work on every course automatically. Verified via GET /api/courses — all courses return tee/greenCenter + 4 POIs. course-overview.tsx (unchanged) reads holes[0].tee + course POI fields.
+

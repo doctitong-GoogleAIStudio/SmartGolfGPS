@@ -196,20 +196,20 @@ async def list_courses():
 @api.post("/courses")
 async def create_course(course: Course):
     if not course.holes:
-        # Sensible defaults so scorecards + net scoring work before mapping:
-        # standard par-72 (par-36 for 9 holes) and a realistic stroke-index.
-        par18 = [4, 5, 3, 4, 4, 3, 5, 4, 4, 4, 4, 5, 3, 4, 4, 3, 5, 4]
-        hcp18 = [7, 11, 3, 1, 15, 17, 5, 13, 9, 8, 12, 4, 2, 16, 18, 6, 14, 10]
-        hcp9 = [3, 7, 1, 5, 9, 2, 8, 4, 6]
         n = course.holeCount
-        course.holes = [
-            Hole(
-                holeNumber=i + 1,
-                par=par18[i] if i < len(par18) else 4,
-                handicap=(hcp9[i] if n == 9 and i < 9 else (hcp18[i] if n == 18 and i < 18 else i + 1)),
-            )
-            for i in range(n)
-        ]
+        dp, dh = default_pars(n), default_hcps(n)
+        course.holes = [Hole(holeNumber=i + 1, par=dp[i], handicap=dh[i]) for i in range(n)]
+    # Auto-generate a simulated on-course layout (tees, greens, hazards + POIs)
+    # from the course pin so Course Navigation and every playing feature work
+    # everywhere, even before a mapper draws exact points in the editor.
+    if not any(h.tee for h in course.holes) and course.latitude is not None and course.longitude is not None:
+        holes, pois = build_layout(course.latitude, course.longitude, course.holeCount,
+                                   [h.par for h in course.holes], [h.handicap for h in course.holes])
+        course.holes = holes
+        course.clubhouse = pois["clubhouse"]
+        course.drivingRange = pois["drivingRange"]
+        course.practiceGreen = pois["practiceGreen"]
+        course.parking = pois["parking"]
     await db.courses.insert_one(course.model_dump())
     return course
 
@@ -647,10 +647,91 @@ def _ll(t):
     return LatLng(lat=t[0], lng=t[1])
 
 
+# ---------- Generic simulated layout generator (used by every course) ----------
+# City-level pins (from the directory) have no per-hole geometry. To make Course
+# Navigation and all on-course features work everywhere, we synthesise a
+# consistent layout (tees, F/C/B greens, a greenside bunker + the 4 POIs) around
+# the course pin — the same technique as the Apo demo. Simulated, not surveyed.
+PAR18 = [4, 5, 3, 4, 4, 3, 5, 4, 4, 4, 4, 5, 3, 4, 4, 3, 5, 4]
+HCP18 = [7, 11, 3, 1, 15, 17, 5, 13, 9, 8, 12, 4, 2, 16, 18, 6, 14, 10]
+HCP9 = [3, 7, 1, 5, 9, 2, 8, 4, 6]
+
+
+def default_pars(n):
+    return [PAR18[i] if i < len(PAR18) else 4 for i in range(n)]
+
+
+def default_hcps(n):
+    if n == 9:
+        return [HCP9[i] if i < len(HCP9) else i + 1 for i in range(n)]
+    return [HCP18[i] if i < len(HCP18) else i + 1 for i in range(n)]
+
+
+def build_layout(base_lat, base_lng, n, pars=None, hcps=None):
+    dp, dh = default_pars(n), default_hcps(n)
+    pars = list(pars or [])[:n] + dp[len(pars or []):] if pars else dp
+    hcps = list(hcps or [])[:n] + dh[len(hcps or []):] if hcps else dh
+    holes = []
+    for i in range(n):
+        par = pars[i] or 4
+        brg = (i * 20) % 360
+        ring = 300 + (i % 3) * 250
+        tee_lat, tee_lng = dest(base_lat, base_lng, brg, ring)
+        hole_brg = (brg + 90) % 360
+        length = {3: 155, 4: 350, 5: 470}.get(par, 350)
+        gc = dest(tee_lat, tee_lng, hole_brg, length)
+        gf = dest(tee_lat, tee_lng, hole_brg, length - 14)
+        gb = dest(tee_lat, tee_lng, hole_brg, length + 14)
+        hazards = []
+        if par >= 4:
+            hz = dest(tee_lat, tee_lng, (hole_brg + 6) % 360, length - 55)
+            cr = dest(tee_lat, tee_lng, (hole_brg + 6) % 360, length - 35)
+            hazards.append(Hazard(name="Greenside Bunker", type="BUNKER", lat=hz[0], lng=hz[1],
+                                  carryLat=cr[0], carryLng=cr[1]))
+        if par == 5:
+            w = dest(tee_lat, tee_lng, hole_brg, length - 130)
+            wc = dest(tee_lat, tee_lng, hole_brg, length - 95)
+            hazards.append(Hazard(name="Fairway Water", type="WATER", lat=w[0], lng=w[1],
+                                  carryLat=wc[0], carryLng=wc[1]))
+        holes.append(Hole(holeNumber=i + 1, par=par, handicap=hcps[i] if i < len(hcps) else i + 1,
+                          tee=LatLng(lat=tee_lat, lng=tee_lng),
+                          greenFront=_ll(gf), greenCenter=_ll(gc), greenBack=_ll(gb),
+                          hazards=hazards))
+    pois = {
+        "clubhouse": _ll(dest(base_lat, base_lng, 0, 60)),
+        "drivingRange": _ll(dest(base_lat, base_lng, 300, 140)),
+        "practiceGreen": _ll(dest(base_lat, base_lng, 45, 90)),
+        "parking": _ll(dest(base_lat, base_lng, 180, 120)),
+    }
+    return holes, pois
+
+
 @app.on_event("startup")
 async def seed():
     await db.courses.replace_one({"id": "demo-apo-davao"}, build_demo_course().model_dump(), upsert=True)
     logger.info("Seeded/updated demo course")
+    # Backfill: give every non-demo course a simulated layout + POIs if it was
+    # imported/created without mapped coordinates. Never touch mapped courses.
+    async for c in db.courses.find({"id": {"$ne": "demo-apo-davao"}}):
+        holes = c.get("holes") or []
+        if any(h.get("tee") for h in holes):
+            continue
+        lat, lng = c.get("latitude"), c.get("longitude")
+        if lat is None or lng is None:
+            continue
+        n = c.get("holeCount") or len(holes) or 18
+        new_holes, pois = build_layout(lat, lng, n, [h.get("par") for h in holes], [h.get("handicap") for h in holes])
+        await db.courses.update_one(
+            {"id": c["id"]},
+            {"$set": {
+                "holes": [h.model_dump() for h in new_holes],
+                "clubhouse": pois["clubhouse"].model_dump(),
+                "drivingRange": pois["drivingRange"].model_dump(),
+                "practiceGreen": pois["practiceGreen"].model_dump(),
+                "parking": pois["parking"].model_dump(),
+            }},
+        )
+    logger.info("Backfilled simulated layouts for unmapped courses")
     if not await db.bags.find_one({"id": "default"}):
         await db.bags.insert_one(default_bag().model_dump())
     if not await db.settings.find_one({"id": "default"}):
