@@ -128,7 +128,6 @@ export function ActivationView({ onClose }: { onClose?: () => void }) {
           <Ionicons name="mail" size={18} color="#fff" />
           <Text style={styles.emailBtnTxt}>EMAIL DEVICE ID TO ACTIVATE</Text>
         </Pressable>
-        <Text style={styles.emailNote}>Sends to {OWNER_EMAIL}</Text>
 
         {/* Enter code */}
         <Text style={styles.section}>ENTER ACTIVATION CODE</Text>
