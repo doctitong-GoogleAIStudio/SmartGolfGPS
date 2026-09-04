@@ -156,3 +156,11 @@ iteration_3 (mobile enhancements): 4/4 PASS (GCash QR, Weather On Card, Voice Ca
 - Backlog (from iteration code review, not yet done): offline bounds from actual hole coords for long links courses; disk-quota preflight; cancel in-flight download. Also still-open iteration_4 bug: Play.tsx roundScores staleness (auto putt prompt can clobber Score-tab edits).
 - Frontend GPS testing: grant geolocation + set_geolocation(7.0545, 125.5195) before nav; viewport 390x844
 - Settings singleton id="default"; demo course id "demo-apo-davao" — do not delete
+
+
+### Auto-Advance + OB/Cart Paths + Trend Range (2026-06)
+- Auto-Advance Hole (play.tsx): during an active round, when the golfer holes out (within 18m of greenCenter) then walks >45m off the green, a CONFIRM banner (testID auto-advance-banner, GO=auto-advance-yes-btn, close=auto-advance-no-btn) offers the next hole. advNearGreenRef tracks near-green state; advanceOfferedRef dedupes per hole; bounded by course.holes.length and requires nextHole.tee. GO calls goHole() (persists currentHole via PUT /rounds/{id}). GPS-driven — not testable on web preview.
+- OB & Cart Paths (courses/[id]/edit.tsx + GolfMap.tsx): editor drawing tools now include DRAW OB (editor-draw-ob, 3+ pts → red fill) and DRAW CART PATH (editor-draw-cart_path, 2+ pts → dashed line). finishShape uses minPts=2 for CART_PATH else 3. GolfMap renders OB via POLY_COLORS #ef4444 fill and CART_PATH as a separate dashed LineString source.
+- Trend Range (trends.tsx): LAST 5 / LAST 10 / ALL chips (trend-range-5/10/all), default ALL. Bars refactored to take rounds[] + value extractor; each bar is a Pressable (testID trend-{title}-bar-{i}) that opens /rounds/{id}. Backend /stats now returns recentRounds[:50] (was [:10]) so ALL is meaningful.
+- Verified on Expo web preview (iteration_13.json) — all 3 features pass, no critical issues. Auto-advance verified by code review (GPS trigger can't fire on web).
+- Backlog carried over: merge nearGreenRef+advNearGreenRef; add nextHole.tee proximity check so advance isn't offered while walking to clubhouse; edit.tsx setMode() should clear active draft when switching modes.

@@ -481,7 +481,7 @@ async def stats():
         "avgGirPct": round(statistics.mean([s["girPct"] for s in summaries if s["girPct"] is not None]), 1) if any(s["girPct"] is not None for s in summaries) else None,
         "avgDriverMeters": round(statistics.mean(driver), 1) if driver else None,
         "totalShots": len(shots),
-        "recentRounds": summaries[:10],
+        "recentRounds": summaries[:50],
     }
 
 

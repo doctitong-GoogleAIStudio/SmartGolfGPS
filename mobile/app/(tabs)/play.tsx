@@ -67,9 +67,12 @@ export default function Rangefinder() {
   const pinsRef = useRef<Record<string, LatLng>>({});
   const [pendingGreen, setPendingGreen] = useState(false);
   const [greenFocus, setGreenFocus] = useState<{ key: number; point: LatLng } | null>(null);
+  const [advancePrompt, setAdvancePrompt] = useState<{ nextIdx: number; holeNumber: number } | null>(null);
 
   const nearGreenRef = useRef(false);
   const puttDismissedRef = useRef<Set<number>>(new Set());
+  const advNearGreenRef = useRef(false);
+  const advanceOfferedRef = useRef<Set<number>>(new Set());
 
   const wxReqRef = useRef<{ pos: LatLng | null; time: number }>({ pos: null, time: 0 });
   const pathBufRef = useRef<{ lat: number; lng: number; t: number }[]>([]);
@@ -315,6 +318,22 @@ export default function Rangefinder() {
       }
     }
   }, [gpsPos, activeRound, hole, roundScores]);
+
+  // Auto-advance: after holing out and walking off the green, offer the next hole.
+  useEffect(() => {
+    if (!gpsPos || !activeRound || !hole?.greenCenter || !course) return;
+    const d = haversineMeters(gpsPos, hole.greenCenter) as number;
+    if (d < 18) {
+      advNearGreenRef.current = true;
+    } else if (d > 45 && advNearGreenRef.current) {
+      advNearGreenRef.current = false;
+      const nextIdx = holeIdx + 1;
+      if (nextIdx < course.holes.length && course.holes[nextIdx]?.tee && !advanceOfferedRef.current.has(hole.holeNumber)) {
+        advanceOfferedRef.current.add(hole.holeNumber);
+        setAdvancePrompt({ nextIdx, holeNumber: course.holes[nextIdx].holeNumber });
+      }
+    }
+  }, [gpsPos, activeRound, hole, course, holeIdx]);
 
   const savePutts = async () => {
     if (!puttReminder || !activeRound) return;
@@ -631,6 +650,20 @@ export default function Rangefinder() {
         </View>
       )}
 
+      {/* Auto-advance prompt */}
+      {advancePrompt && (
+        <View style={[styles.advanceBanner, { top: insets.top + 110 }]} testID="auto-advance-banner">
+          <Ionicons name="flag" size={18} color={colors.gold} />
+          <Text style={styles.advanceTxt}>Next hole {advancePrompt.holeNumber}?</Text>
+          <Pressable testID="auto-advance-yes-btn" onPress={() => { goHole(advancePrompt.nextIdx); setAdvancePrompt(null); }} style={styles.advYes}>
+            <Text style={styles.advYesTxt}>GO</Text>
+          </Pressable>
+          <Pressable testID="auto-advance-no-btn" onPress={() => setAdvancePrompt(null)} style={styles.advNo}>
+            <Ionicons name="close" size={14} color="#fff" />
+          </Pressable>
+        </View>
+      )}
+
       {/* Distance card */}
       <View style={[styles.distCard, { top: insets.top + 60 }]} testID="distance-card">
         <Text style={styles.distLabel}>{targetLabel} · ACTUAL</Text>
@@ -918,6 +951,11 @@ const styles = StyleSheet.create({
   suggestSwitch: { height: 34, paddingHorizontal: 12, borderRadius: 10, backgroundColor: colors.gold, alignItems: "center", justifyContent: "center" },
   suggestSwitchTxt: { color: colors.charcoal, fontSize: 10, fontWeight: "900" },
   suggestX: { height: 34, width: 34, borderRadius: 10, backgroundColor: "rgba(255,255,255,0.12)", alignItems: "center", justifyContent: "center" },
+  advanceBanner: { position: "absolute", alignSelf: "center", flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: colors.charcoal, borderRadius: 16, paddingHorizontal: 12, paddingVertical: 8, borderWidth: 1, borderColor: "rgba(212,175,55,0.6)", zIndex: 26 },
+  advanceTxt: { color: "#fff", fontSize: 12, fontWeight: "900" },
+  advYes: { height: 34, paddingHorizontal: 14, borderRadius: 10, backgroundColor: colors.gold, alignItems: "center", justifyContent: "center" },
+  advYesTxt: { color: colors.charcoal, fontSize: 11, fontWeight: "900", letterSpacing: 0.5 },
+  advNo: { height: 34, width: 34, borderRadius: 10, backgroundColor: "rgba(255,255,255,0.12)", alignItems: "center", justifyContent: "center" },
   distCard: { position: "absolute", left: 12, backgroundColor: "#fff", borderRadius: 18, borderWidth: 1, borderColor: colors.zinc300, paddingHorizontal: 16, paddingVertical: 10, minWidth: 130, zIndex: 15, shadowColor: "#000", shadowOpacity: 0.2, shadowRadius: 8, elevation: 5 },
   distLabel: { fontSize: 10, letterSpacing: 1.5, fontWeight: "800", color: colors.zinc500 },
   distBig: { fontSize: 52, lineHeight: 56, color: colors.charcoal },

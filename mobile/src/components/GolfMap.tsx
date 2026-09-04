@@ -56,6 +56,7 @@ const POLY_COLORS: Record<string, string> = {
   GREEN: "#86efac",
   BUNKER: "#fbbf24",
   WATER: "#38bdf8",
+  OB: "#ef4444",
 };
 
 const HAZARD_COLORS: Record<string, string> = {
@@ -199,10 +200,15 @@ export function GolfMap({
     >
       <Camera ref={cameraRef} initialViewState={{ center: [center.lng, center.lat], zoom }} />
 
-      {polygons.length > 0 && (
-        <GeoJSONSource id="hole-polys" data={{ type: "FeatureCollection", features: polygons.filter((p) => p.points.length >= 3).map((p) => ({ type: "Feature", properties: { color: POLY_COLORS[p.type] || "#9ca3af" }, geometry: { type: "Polygon", coordinates: [[...p.points.map((pt) => [pt.lng, pt.lat]), [p.points[0].lng, p.points[0].lat]]] } })) }}>
+      {polygons.filter((p) => p.type !== "CART_PATH" && p.points.length >= 3).length > 0 && (
+        <GeoJSONSource id="hole-polys" data={{ type: "FeatureCollection", features: polygons.filter((p) => p.type !== "CART_PATH" && p.points.length >= 3).map((p) => ({ type: "Feature", properties: { color: POLY_COLORS[p.type] || "#9ca3af" }, geometry: { type: "Polygon", coordinates: [[...p.points.map((pt) => [pt.lng, pt.lat]), [p.points[0].lng, p.points[0].lat]]] } })) }}>
           <Layer id="hole-polys-fill" type="fill" source="hole-polys" paint={{ "fill-color": ["get", "color"], "fill-opacity": 0.35 }} />
           <Layer id="hole-polys-line" type="line" source="hole-polys" paint={{ "line-color": ["get", "color"], "line-width": 1.5 }} />
+        </GeoJSONSource>
+      )}
+      {polygons.filter((p) => p.type === "CART_PATH" && p.points.length >= 2).length > 0 && (
+        <GeoJSONSource id="cart-paths" data={{ type: "FeatureCollection", features: polygons.filter((p) => p.type === "CART_PATH" && p.points.length >= 2).map((p) => ({ type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: p.points.map((pt) => [pt.lng, pt.lat]) } })) }}>
+          <Layer id="cart-paths-line" type="line" source="cart-paths" layout={{ "line-cap": "round", "line-join": "round" }} paint={{ "line-color": "#e5e7eb", "line-width": 3, "line-dasharray": [2, 2], "line-opacity": 0.85 }} />
         </GeoJSONSource>
       )}
 

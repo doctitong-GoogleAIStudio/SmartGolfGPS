@@ -1,0 +1,40 @@
+{
+  "summary": "Iteration 13 – Mobile Expo web preview validation of three new features. All three features verified end-to-end on the Expo web preview at 390x844: (1) OB & CART_PATH drawing tools render in the course editor drawing-tools scroller with correct testIDs (editor-draw-ob, editor-draw-cart_path). Selecting either reveals the draft control row (editor-draw-undo + editor-draw-finish). Pressing FINISH with <min points triggers the 'Tap at least 3 points first' toast (screenshot captured) without crashing, and editor-save-btn tap succeeds ('Course saved' toast) so the mode-selection / draft state does not break persistence. GolfMap.web is a stub — actual on-map vertex placing is native-only per spec; this is expected. (2) /trends: LAST 5 / LAST 10 / ALL chips (trend-range-5/10/all) all render; ALL is highlighted as the default (matches user choice). 1 seeded round renders as a single black/blue/green bar per card (Score to Par, Putts, GIR %). trend-bar-0 exists once per chart (3 duplicate data-testid attributes across the 3 Bars sections — see minor issue). Tapping trend-bar-0.first navigates to /rounds/70e34bff-83ad-4c55-bbc8-25691b8a001f and renders the round detail table (screenshot captured). Chip clicks toggle range without crashing. (3) /play: rangefinder-screen mounts; auto-advance-banner correctly absent (GPS is denied in the preview so the >45m-off-green trigger cannot fire — expected). Screen does not crash despite the new auto-advance useEffect + advNearGreenRef refs + advancePrompt state; adjacent GPS-driven UI (GPS DENIED helper card, dist-arcs-btn, right controls) still renders. Code review confirms the banner block (lines 654-665 of play.tsx) correctly renders {advancePrompt && ...} with testIDs auto-advance-banner / auto-advance-yes-btn / auto-advance-no-btn, and GO calls goHole(nextIdx) which persists currentHole via PUT /rounds/{id}. Testing type was 'frontend only' — backend not re-run (iteration_12 already covered /stats returning recentRounds).",
+  "platforms_tested": ["mobile"],
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "mobile": {
+      "ui_bugs": [],
+      "integration_issues": [],
+      "design_issues": [],
+      "react_native_issues": []
+    }
+  },
+  "parity_issues": [],
+  "test_report_links": ["/app/test_reports/iteration_13.json"],
+  "action_items": [
+    "MINOR: /app/mobile/app/trends.tsx line 42 – testID `trend-bar-${i}` collides across the three <Bars/> cards (bar-0/1/... appear three times each in the DOM, once per chart). Not functionally broken (each Pressable still works) but breaks unique-selector expectations for automated tests. Consider prefixing by chart, e.g. testID=`trend-${title}-bar-${i}`, or scope with the surrounding card testID.",
+    "MINOR (carried from iteration_12, still valid): /app/mobile/app/courses/[id]/edit.tsx – setMode() does not clear the current draft, so switching from DRAW FAIRWAY → DRAW GREEN mid-drawing re-types the accumulated vertices as GREEN. Editor already sets `setDraft(null)` on the draw-* buttons via `onPress={() => { setDraft(null); setMode(...) }}` (line 164), so this is only a risk when switching between hazard/POI/marker modes and back into a draw:* mode — check flow with a longer trace.",
+    "MINOR (carried from iteration_12): /app/mobile/app/(tabs)/play.tsx line ~530 next-tee-banner increments holeIdx without an upper bound check; the new auto-advance path at lines 322-336 does check `nextIdx < course.holes.length` correctly, so the new auto-advance code is safer than the older next-tee banner.",
+    "MINOR: /app/mobile/app/(tabs)/play.tsx line ~322-336 – both nearGreenRef (putt reminder, 18m/35m thresholds) and advNearGreenRef (auto-advance, 18m/45m thresholds) run against the SAME greenCenter distance; consider a single ref to avoid the two effects racing when the golfer crosses the boundaries in quick succession, and also add a `nextHole.tee` distance check so 'Next hole {n}' isn't offered when the player is actually walking toward the clubhouse."
+  ],
+  "critical_code_review_comments": [
+    "edit.tsx line 163: OB and CART_PATH added to the draw-type array — correct. Note the testID uses .toLowerCase() on the display key so CART_PATH → editor-draw-cart_path (underscore preserved). Matches spec.",
+    "edit.tsx line 96-102 finishShape: minPts=2 for CART_PATH, 3 otherwise — matches spec. Uses draft.type check, safe.",
+    "GolfMap.tsx line 203-208: polygons filter excludes CART_PATH from fill polygons — correct. Line 209-213: CART_PATH rendered as dashed LineString with line-dasharray [2,2] and #e5e7eb — matches spec.",
+    "GolfMap.tsx line 59: OB polygon color is #ef4444 red — correct.",
+    "trends.tsx line 61: default range = 'all' — matches user choice.",
+    "trends.tsx line 71: slice(-(range as number)) returns the LAST N (most recent) rounds — correct given `[...recentRounds].reverse()` puts oldest→newest.",
+    "trends.tsx line 76-77: openRound only navigates if r.id truthy — safe.",
+    "play.tsx line 322-336: auto-advance uses advNearGreenRef gate + advanceOfferedRef Set (dedupe by hole) + course.holes.length bound + course.holes[nextIdx]?.tee check — well-guarded.",
+    "play.tsx line 658: GO handler calls goHole(nextIdx) which persists currentHole to server — correct integration."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "not-tested (frontend-only)", "frontend": "100% (3/3 features verified)"},
+  "test_credentials": "N/A – no auth in this app",
+  "seed_data_creation": "Used existing seeded round (id 70e34bff-…) for trend-bar navigation; no new data created.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "All three iteration-13 features (OB/CART_PATH drawing, Trends range+tap, Auto-Advance banner) are verified via markup + interaction on the Expo web preview. The auto-advance banner and actual polygon rendering on the satellite map are only exercisable on a native/device build (GolfMap.web is a stub; GPS is denied in the preview). Duplicate `trend-bar-N` testIDs across 3 charts are a minor selector-uniqueness issue only. Prior iteration_12 backend tests (16/16) still valid; no backend changes required.",
+  "rca of the issue": ""
+}

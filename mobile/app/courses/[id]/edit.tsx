@@ -94,7 +94,8 @@ export default function CourseEditor() {
   const coursePois = POI_MODES.filter(([k]) => course[k]).map(([k, l]) => ({ key: k, label: l, pt: course[k] }));
   const livePolys = draft ? [...(hole.polygons || []), draft] : (hole.polygons || []);
   const finishShape = () => {
-    if (!draft || draft.points.length < 3) { toast.error("Tap at least 3 points first"); return; }
+    const minPts = draft?.type === "CART_PATH" ? 2 : 3;
+    if (!draft || draft.points.length < minPts) { toast.error(`Tap at least ${minPts} points first`); return; }
     patchHole({ polygons: [...(hole.polygons || []), draft] });
     setDraft(null);
     toast.success(`${draft.type} shape saved`);
@@ -159,7 +160,7 @@ export default function CourseEditor() {
               <Text style={[styles.modeTxt, { color: mode === k ? "#fff" : colors.zinc600 }]}>{l} {course[k] ? "✓" : ""}</Text>
             </Pressable>
           ))}
-          {[["FAIRWAY", "DRAW FAIRWAY"], ["GREEN", "DRAW GREEN"], ["BUNKER", "DRAW BUNKER"], ["WATER", "DRAW WATER"]].map(([t, l]) => (
+          {[["FAIRWAY", "DRAW FAIRWAY"], ["GREEN", "DRAW GREEN"], ["BUNKER", "DRAW BUNKER"], ["WATER", "DRAW WATER"], ["OB", "DRAW OB"], ["CART_PATH", "DRAW CART PATH"]].map(([t, l]) => (
             <Pressable key={t} testID={`editor-draw-${t.toLowerCase()}`} onPress={() => { setDraft(null); setMode(`draw:${t}`); }} style={[styles.modeBtn, { backgroundColor: mode === `draw:${t}` ? colors.fairway : colors.zinc100 }]}>
               <Text style={[styles.modeTxt, { color: mode === `draw:${t}` ? "#fff" : colors.zinc600 }]}>{l}</Text>
             </Pressable>
