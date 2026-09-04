@@ -101,6 +101,12 @@ iteration_3 (mobile enhancements): 4/4 PASS (GCash QR, Weather On Card, Voice Ca
 
 ## Notes for next agent
 
+### EAS build fix — Node engine incompatibility (2026-06)
+- Symptom: EAS Android build failed at INSTALL_DEPENDENCIES with `error @mapbox/jsonlint-lines-primitives@2.0.3: The engine "node" is incompatible ... Expected ">= 22". Got "20.19.4"` → `Found incompatible module` (yarn classic hard-errors).
+- Cause: transitive dep of @maplibre/maplibre-react-native (via @maplibre/maplibre-gl-style-spec) pins jsonlint-lines-primitives@^2.0.3, which declares engines.node>=22; EAS builder runs Node 20.
+- Fix: added /app/mobile/.yarnrc with `ignore-engines true` (downgrades engine mismatch to a warning). Lockfile-safe — does NOT modify yarn.lock, so `yarn install --frozen-lockfile` still passes (verified locally by running the exact EAS install command). No app code changed.
+- To confirm: re-run Publish (only an EAS build validates it; testing_agent/preview cannot).
+
 ### Storage Meter + Auto Offline (2026-06) [native-only]
 - Storage Meter: Courses screen shows "OFFLINE MAPS · <size> · <n> courses" with a FREE UP button. offline.ts getOfflineUsage() sums OfflinePack.status().completedTileSize; clearAllOffline() deletes all packs. Usage refreshes on focus + after every download/delete/clear.
 - Auto Offline: play.tsx prompts once per course (Alert) the first time a round is active on it, offering to save its map offline; tracked in storage key sg_offline_prompted. Uses boundsForCourse.
