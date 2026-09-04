@@ -35,3 +35,29 @@ export function movedMoreThan(a: LatLng | null | undefined, b: LatLng | null | u
   if (!a || !b) return true;
   return (haversineMeters(a, b) as number) > meters;
 }
+
+// Tile-download bounds [west, south, east, north] tight to a course's mapped
+// holes (tees, greens, hazards), padded ~15%. Falls back to a ~2.2 km box
+// around the centroid when the course has no holes. Pure JS — safe on web.
+export function boundsForCourse(course: any, fallbackLat: number, fallbackLng: number): [number, number, number, number] {
+  const pts: LatLng[] = [];
+  (course?.holes || []).forEach((h: any) => {
+    [h.tee, h.greenFront, h.greenCenter, h.greenBack].forEach((p: LatLng) => {
+      if (p && p.lat != null && p.lng != null) pts.push(p);
+    });
+    (h.hazards || []).forEach((hz: any) => {
+      if (hz && hz.lat != null && hz.lng != null) pts.push({ lat: hz.lat, lng: hz.lng });
+    });
+  });
+  if (pts.length < 2) {
+    const d = 0.02;
+    const flat = Number.isFinite(fallbackLat) ? fallbackLat : 12.6;
+    const flng = Number.isFinite(fallbackLng) ? fallbackLng : 122.0;
+    return [flng - d, flat - d, flng + d, flat + d];
+  }
+  let w = Infinity, s = Infinity, e = -Infinity, n = -Infinity;
+  pts.forEach((p) => { w = Math.min(w, p.lng); e = Math.max(e, p.lng); s = Math.min(s, p.lat); n = Math.max(n, p.lat); });
+  const padLat = (n - s) * 0.15 + 0.002;
+  const padLng = (e - w) * 0.15 + 0.002;
+  return [w - padLng, s - padLat, e + padLng, n + padLat];
+}

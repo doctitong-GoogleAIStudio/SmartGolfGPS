@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { View, Text, StyleSheet, Pressable, ScrollView, Modal, TextInput } from "react-native";
+import { View, Text, StyleSheet, Pressable, ScrollView, Modal, TextInput, Alert } from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -8,12 +8,13 @@ import { colors, font } from "@/src/theme";
 import { GolfMap } from "@/src/components/GolfMap";
 import { useGPS } from "@/src/hooks/useGPS";
 import { useSettings } from "@/src/context/SettingsContext";
-import { haversineMeters, bearingDeg, fmtDist, unitLabel, movedMoreThan, LatLng } from "@/src/lib/geo";
+import { haversineMeters, bearingDeg, fmtDist, unitLabel, movedMoreThan, boundsForCourse, LatLng } from "@/src/lib/geo";
 import { computePlaysLike } from "@/src/lib/playsLike";
 import { recommendClub } from "@/src/lib/clubRec";
 import { api, cachedGet, getActiveRound, setActiveRound, ActiveRound } from "@/src/lib/api";
 import { storage } from "@/src/utils/storage";
 import { startBackgroundTracking, stopBackgroundTracking, drainBackgroundPath } from "@/src/lib/locationTask";
+import { offlineSupported, listOfflineCourseIds, downloadCourseTiles } from "@/src/lib/offline";
 import { toast } from "@/src/lib/toast";
 
 const DEFAULT_CENTER: LatLng = { lat: 7.052, lng: 125.517 };
@@ -125,6 +126,36 @@ export default function Rangefinder() {
     if (activeRound && settings.gpsTracking !== false) startBackgroundTracking();
     return () => { stopBackgroundTracking(); };
   }, [activeRound, settings.gpsTracking]);
+
+  // Auto Offline: the first time a round starts on a course, offer to save its map offline.
+  useEffect(() => {
+    if (!offlineSupported || !activeRound || !course?.id) return;
+    let alive = true;
+    (async () => {
+      const raw = await storage.getItem<string>("sg_offline_prompted", "");
+      const prompted: string[] = raw ? JSON.parse(raw) : [];
+      if (prompted.includes(course.id)) return;
+      const ids = await listOfflineCourseIds();
+      if (!alive || ids.includes(course.id)) return;
+      await storage.setItem("sg_offline_prompted", JSON.stringify([...prompted, course.id]));
+      Alert.alert(
+        "Save this course offline?",
+        `Download ${course.name}'s satellite map so it keeps working with no signal on the course.`,
+        [
+          { text: "Not now", style: "cancel" },
+          { text: "Save offline", onPress: async () => {
+            try {
+              toast.info("Downloading offline map…", "You can keep playing while it saves.");
+              const b = boundsForCourse(course, course.latitude, course.longitude);
+              await downloadCourseTiles(course.id, course.name, b);
+              toast.success("Offline map saved");
+            } catch { toast.error("Could not save offline map"); }
+          } },
+        ],
+      );
+    })();
+    return () => { alive = false; };
+  }, [activeRound?.id, course?.id]);
 
   // Auto weather (throttled).
   useEffect(() => {

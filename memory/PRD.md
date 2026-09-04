@@ -101,6 +101,13 @@ iteration_3 (mobile enhancements): 4/4 PASS (GCash QR, Weather On Card, Voice Ca
 
 ## Notes for next agent
 
+### Storage Meter + Auto Offline (2026-06) [native-only]
+- Storage Meter: Courses screen shows "OFFLINE MAPS · <size> · <n> courses" with a FREE UP button. offline.ts getOfflineUsage() sums OfflinePack.status().completedTileSize; clearAllOffline() deletes all packs. Usage refreshes on focus + after every download/delete/clear.
+- Auto Offline: play.tsx prompts once per course (Alert) the first time a round is active on it, offering to save its map offline; tracked in storage key sg_offline_prompted. Uses boundsForCourse.
+- boundsForCourse moved to src/lib/geo.ts (pure, shared by Courses + Play). offline.web.ts stubs getOfflineUsage/clearAllOffline (offlineSupported=false) so all offline UI is inert/hidden on web.
+- Native-only. Web regression passed 5/5 (iteration_8.json). Verify on device build.
+- Backlog: disk-quota preflight + cancel in-flight download. Open iteration_4 bug: Play.tsx roundScores staleness.
+
 ### Smart Offline Area + Download All (2026-06) [native-only]
 - Smart Offline Area: offline download now sizes tile bounds to the course's actual mapped holes. courses/index.tsx boundsForCourse(course, lat, lng) unions all tee/green/hazard coords (padded ~15%) from GET /api/courses/{id}; falls back to a ~2.2km box (with NaN guard) when the course has no holes. downloadCourseTiles now takes explicit bounds: (courseId, name, bounds, onProgress).
 - Download All: "SAVE ALL COURSES OFFLINE (n)" button on Courses screen downloads every not-yet-offline course sequentially (shared runDownload helper), per-card progress + final summary toast; hidden when all courses already offline. bulkBusy blocks single taps while running.

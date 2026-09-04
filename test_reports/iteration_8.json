@@ -1,0 +1,30 @@
+{
+  "summary": "Regression sweep on mobile Expo web preview after adding Storage Meter (My Courses) + Auto Offline prompt (/play) + moving boundsForCourse to src/lib/geo.ts. All 5 targeted flows PASS. /courses lists 3 cards with NEW COURSE, IMPORT, BROWSE PHILIPPINE COURSES, and PLAY/EDIT/SHARE/DELETE per card. Storage meter, SAVE ALL, per-card offline row, and Auto-Offline Alert are correctly INERT on web (offlineSupported=false) as designed. /play mounts rangefinder-screen with no crash and no errant alert. /ph-courses loads with sort/region chips (All 98, Metro Manila 10, Cavite/Laguna 14) working. No JS errors or white screens.",
+  "platforms_tested": ["mobile"],
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "mobile": {
+      "ui_bugs": [],
+      "integration_issues": [],
+      "design_issues": [],
+      "react_native_issues": [
+        {"component": "shadow*/textShadow* style props", "issue": "React Native Web deprecation warnings ('shadow*' -> boxShadow, 'textShadow*' -> textShadow). Cosmetic on web preview only; native still uses shadow* correctly. Non-blocking."},
+        {"component": "props.pointerEvents", "issue": "React Native Web deprecation warning ('props.pointerEvents' -> style.pointerEvents). Non-blocking. Reference: /app/mobile/app/(tabs)/play.tsx:463 (topBar pointerEvents='box-none')."}
+      ]
+    }
+  },
+  "parity_issues": [],
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "offline.web.ts stub correctly exports offlineSupported=false and no-op impls for getOfflineUsage/clearAllOffline — the conditional guards in courses/index.tsx (line 197) and play.tsx (line 132) correctly hide/skip the meter and Alert. Good design.",
+    "boundsForCourse in src/lib/geo.ts is pure JS with sane fallbacks (~2.2km box) when a course has <2 mapped points — safe to call on web without triggering native map deps.",
+    "Auto-Offline Alert in play.tsx writes to sg_offline_prompted BEFORE showing the Alert, so a user who dismisses via 'Not now' will still not be re-prompted. That matches the 'ask once per course' intent stated in the PRD."
+  ],
+  "updated_files": [],
+  "success_rate": {"frontend": "100%"},
+  "seed_data_creation": "None. Reused existing seeded courses (Apo Highlands Demo, Southpacific Golf and Leisure, Manila Golf & Country Club).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Mobile Expo preview at https://smart-golf-gps.expo.preview.emergentagent.com. Offline surfaces (storage meter [data-testid=offline-storage-meter], FREE UP [clear-offline-btn], SAVE ALL [download-all-offline-btn], per-card [course-offline-<id>], Auto-Offline Alert) are ALL native-only via offline.web.ts stub — do NOT flag their absence on web. Verified selectors: new-course-btn, import-course-btn, browse-ph-courses-btn, course-card-<id>, course-play/edit/share/delete-<id>, rangefinder-screen, distance-card."
+}

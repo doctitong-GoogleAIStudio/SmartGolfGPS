@@ -10,36 +10,19 @@ import { api, cachedGet } from "@/src/lib/api";
 import { storage } from "@/src/utils/storage";
 import { ScreenHeader } from "@/src/components/ui";
 import { toast } from "@/src/lib/toast";
-import { offlineSupported, listOfflineCourseIds, downloadCourseTiles, deleteCourseTiles } from "@/src/lib/offline";
-
-type Pt = { lat: number; lng: number };
-
-// Bounds tight to a course's mapped holes (tees, greens, hazards), padded ~15%.
-// Falls back to a ~2.2 km box around the course centroid when it has no holes.
-function boundsForCourse(course: any, fallbackLat: number, fallbackLng: number): [number, number, number, number] {
-  const pts: Pt[] = [];
-  (course?.holes || []).forEach((h: any) => {
-    [h.tee, h.greenFront, h.greenCenter, h.greenBack].forEach((p: Pt) => {
-      if (p && p.lat != null && p.lng != null) pts.push(p);
-    });
-    (h.hazards || []).forEach((hz: any) => {
-      if (hz && hz.lat != null && hz.lng != null) pts.push({ lat: hz.lat, lng: hz.lng });
-    });
-  });
-  if (pts.length < 2) {
-    const d = 0.02;
-    const flat = Number.isFinite(fallbackLat) ? fallbackLat : 12.6;
-    const flng = Number.isFinite(fallbackLng) ? fallbackLng : 122.0;
-    return [flng - d, flat - d, flng + d, flat + d];
-  }
-  let w = Infinity, s = Infinity, e = -Infinity, n = -Infinity;
-  pts.forEach((p) => { w = Math.min(w, p.lng); e = Math.max(e, p.lng); s = Math.min(s, p.lat); n = Math.max(n, p.lat); });
-  const padLat = (n - s) * 0.15 + 0.002;
-  const padLng = (e - w) * 0.15 + 0.002;
-  return [w - padLng, s - padLat, e + padLng, n + padLat];
-}
+import { boundsForCourse } from "@/src/lib/geo";
+import { offlineSupported, listOfflineCourseIds, downloadCourseTiles, deleteCourseTiles, getOfflineUsage, clearAllOffline } from "@/src/lib/offline";
 
 export default function Courses() {
+
+  function fmtBytes(bytes: number): string {
+    if (!bytes) return "0 MB";
+    const mb = bytes / (1024 * 1024);
+    if (mb >= 1024) return `${(mb / 1024).toFixed(1)} GB`;
+    if (mb >= 10) return `${Math.round(mb)} MB`;
+    return `${mb.toFixed(1)} MB`;
+  }
+
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [courses, setCourses] = useState<any[]>([]);
@@ -50,15 +33,30 @@ export default function Courses() {
   const [offlineIds, setOfflineIds] = useState<Set<string>>(new Set());
   const [dlProgress, setDlProgress] = useState<Record<string, number>>({});
   const [bulkBusy, setBulkBusy] = useState(false);
+  const [usage, setUsage] = useState<{ bytes: number; count: number }>({ bytes: 0, count: 0 });
   const mountedRef = React.useRef(true);
+
+  const refreshUsage = () => { if (offlineSupported) getOfflineUsage().then((u) => mountedRef.current && setUsage(u)).catch(() => {}); };
 
   const load = () => cachedGet<any[]>("/courses", "courses").then(setCourses).catch(() => {});
   useFocusEffect(useCallback(() => {
     mountedRef.current = true;
     load();
-    if (offlineSupported) listOfflineCourseIds().then((ids) => setOfflineIds(new Set(ids))).catch(() => {});
+    if (offlineSupported) { listOfflineCourseIds().then((ids) => setOfflineIds(new Set(ids))).catch(() => {}); refreshUsage(); }
     return () => { mountedRef.current = false; };
   }, []));
+
+  const clearAll = () => {
+    Alert.alert("Free up offline maps?", `This removes all downloaded satellite tiles (${fmtBytes(usage.bytes)}). You can re-download anytime.`, [
+      { text: "Cancel", style: "cancel" },
+      { text: "Free up", style: "destructive", onPress: async () => {
+        await clearAllOffline();
+        setOfflineIds(new Set());
+        setUsage({ bytes: 0, count: 0 });
+        toast.success("Offline maps cleared");
+      } },
+    ]);
+  };
 
   const runDownload = async (c: any) => {
     let course = c;
@@ -71,6 +69,7 @@ export default function Courses() {
     if (!mountedRef.current) return;
     setOfflineIds((s) => new Set(s).add(c.id));
     setDlProgress((prev) => { const n = { ...prev }; delete n[c.id]; return n; });
+    refreshUsage();
   };
 
   const toggleOffline = async (c: any) => {
@@ -82,6 +81,7 @@ export default function Courses() {
         { text: "Remove", style: "destructive", onPress: async () => {
           await deleteCourseTiles(c.id);
           setOfflineIds((s) => { const n = new Set(s); n.delete(c.id); return n; });
+          refreshUsage();
           toast.success("Offline map removed");
         } },
       ]);
@@ -114,6 +114,7 @@ export default function Courses() {
     }
     if (mountedRef.current) {
       setBulkBusy(false);
+      refreshUsage();
       toast.success(`Saved ${done} course${done === 1 ? "" : "s"} offline`, done < todo.length ? "Some downloads failed — tap a card to retry." : undefined);
     }
   };
@@ -192,6 +193,15 @@ export default function Courses() {
               {bulkBusy ? "SAVING ALL COURSES OFFLINE…" : `SAVE ALL COURSES OFFLINE (${courses.filter((c) => !offlineIds.has(c.id)).length})`}
             </Text>
           </Pressable>
+        )}
+        {offlineSupported && usage.count > 0 && (
+          <View style={styles.storageRow} testID="offline-storage-meter">
+            <Ionicons name="server" size={16} color={colors.zinc500} />
+            <Text style={styles.storageTxt}>OFFLINE MAPS · {fmtBytes(usage.bytes)} · {usage.count} course{usage.count === 1 ? "" : "s"}</Text>
+            <Pressable onPress={clearAll} testID="clear-offline-btn" style={styles.clearBtn}>
+              <Text style={styles.clearTxt}>FREE UP</Text>
+            </Pressable>
+          </View>
         )}
         {courses.map((c) => (
           <View key={c.id} style={styles.card} testID={`course-card-${c.id}`}>
@@ -286,6 +296,10 @@ const styles = StyleSheet.create({
   phBtnTxt: { color: "#fff", fontWeight: "900", letterSpacing: 1, fontSize: 13 },
   saveAllBtn: { height: 48, borderRadius: 14, backgroundColor: "rgba(20,83,45,0.08)", borderWidth: 1, borderColor: colors.green, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
   saveAllTxt: { color: colors.green, fontWeight: "900", letterSpacing: 0.5, fontSize: 12 },
+  storageRow: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: "#fff", borderWidth: 1, borderColor: colors.zinc200, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 10 },
+  storageTxt: { flex: 1, fontSize: 11, fontWeight: "900", letterSpacing: 0.3, color: colors.zinc600 },
+  clearBtn: { paddingHorizontal: 12, height: 32, borderRadius: 9, backgroundColor: "#FEE2E2", alignItems: "center", justifyContent: "center" },
+  clearTxt: { fontSize: 11, fontWeight: "900", color: colors.red, letterSpacing: 0.5 },
   importHint: { fontSize: 13, color: colors.zinc500, fontWeight: "600", lineHeight: 19, marginTop: -4 },
   card: { backgroundColor: "#fff", borderWidth: 1, borderColor: colors.zinc200, borderRadius: 18, padding: 16 },
   cName: { fontWeight: "800", fontSize: 15, color: colors.charcoal },

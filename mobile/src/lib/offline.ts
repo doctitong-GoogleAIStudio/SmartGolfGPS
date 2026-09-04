@@ -48,3 +48,23 @@ export async function deleteCourseTiles(courseId: string): Promise<void> {
     if ((p.metadata?.courseId as string) === courseId) await OfflineManager.deletePack(p.id);
   }
 }
+
+export async function getOfflineUsage(): Promise<{ bytes: number; count: number }> {
+  try {
+    const packs = await OfflineManager.getPacks();
+    let bytes = 0;
+    for (const p of packs) {
+      try { const s = await p.status(); bytes += s.completedTileSize || 0; } catch { /* skip */ }
+    }
+    return { bytes, count: packs.length };
+  } catch {
+    return { bytes: 0, count: 0 };
+  }
+}
+
+export async function clearAllOffline(): Promise<void> {
+  const packs = await OfflineManager.getPacks();
+  for (const p of packs) {
+    try { await OfflineManager.deletePack(p.id); } catch { /* skip */ }
+  }
+}

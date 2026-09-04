@@ -12,3 +12,11 @@ export async function downloadCourseTiles(): Promise<void> {
 export async function deleteCourseTiles(): Promise<void> {
   // no-op on web
 }
+
+export async function getOfflineUsage(): Promise<{ bytes: number; count: number }> {
+  return { bytes: 0, count: 0 };
+}
+
+export async function clearAllOffline(): Promise<void> {
+  // no-op on web
+}
