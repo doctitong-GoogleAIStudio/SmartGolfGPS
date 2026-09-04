@@ -11,6 +11,7 @@ import { storage } from "@/src/utils/storage";
 import { ScreenHeader } from "@/src/components/ui";
 import { toast } from "@/src/lib/toast";
 import { boundsForCourse } from "@/src/lib/geo";
+import { MapBadge } from "@/src/components/MapBadge";
 import { offlineSupported, listOfflineCourseIds, downloadCourseTiles, deleteCourseTiles, getOfflineUsage, clearAllOffline } from "@/src/lib/offline";
 
 export default function Courses() {
@@ -207,6 +208,7 @@ export default function Courses() {
           <View key={c.id} style={styles.card} testID={`course-card-${c.id}`}>
             <Text style={[styles.cName, { fontFamily: font.headBold }]}>{c.name}</Text>
             <Text style={styles.cMeta}>{c.location} · {c.holeCount} holes {c.isDemo ? "· DEMO DATA" : ""}</Text>
+            <MapBadge course={c} style={{ marginTop: 8 }} testID={`course-badge-${c.id}`} />
             <View style={{ flexDirection: "row", gap: 8, marginTop: 12 }}>
               <Pressable style={styles.playBtn} testID={`course-play-${c.id}`} onPress={async () => { await storage.setItem("sg_quick_course", c.id); router.push("/play"); }}>
                 <Ionicons name="locate" size={16} color="#fff" />

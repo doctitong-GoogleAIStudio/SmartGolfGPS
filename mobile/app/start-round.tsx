@@ -6,6 +6,7 @@ import { colors, font } from "@/src/theme";
 import { api, cachedGet, getActiveRound, setActiveRound, ActiveRound } from "@/src/lib/api";
 import { storage } from "@/src/utils/storage";
 import { ScreenHeader, Overline } from "@/src/components/ui";
+import { MapBadge } from "@/src/components/MapBadge";
 import { toast } from "@/src/lib/toast";
 
 export default function StartRound() {
@@ -57,6 +58,7 @@ export default function StartRound() {
               <Pressable key={c.id} testID={`start-course-${c.id}`} onPress={() => setCourseId(c.id)} style={[styles.courseCard, courseId === c.id && styles.courseCardActive]}>
                 <Text style={styles.courseName}>{c.name}</Text>
                 <Text style={styles.courseMeta}>{c.location} · {c.holeCount} holes {c.isDemo ? "· DEMO DATA" : ""}</Text>
+                <MapBadge course={c} style={{ marginTop: 8 }} testID={`start-badge-${c.id}`} />
               </Pressable>
             ))}
           </View>

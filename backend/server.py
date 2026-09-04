@@ -3,6 +3,8 @@ import time
 import uuid
 import math
 import json
+import asyncio
+import hashlib
 import logging
 import statistics
 from pathlib import Path
@@ -59,6 +61,65 @@ def dest(lat, lon, bearing_deg, dist_m):
     return round(math.degrees(p2), 7), round(math.degrees(l2), 7)
 
 
+# ---------- Geocoding (OSM Nominatim, keyless, best-effort) ----------
+_NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
+_geo_lock = asyncio.Lock()
+_geo_last = 0.0
+
+
+async def _nominatim_get(q: str):
+    """One rate-limited Nominatim request → (lat, lng) or None."""
+    global _geo_last
+    async with _geo_lock:
+        wait = 1.1 - (time.monotonic() - _geo_last)
+        if wait > 0:
+            await asyncio.sleep(wait)
+        _geo_last = time.monotonic()
+        headers = {"User-Agent": os.environ.get("NOMINATIM_USER_AGENT", "SmartGolfGPS/1.0"), "Accept": "application/json"}
+        async with httpx.AsyncClient(timeout=httpx.Timeout(6.0), headers=headers) as hc:
+            r = await hc.get(_NOMINATIM_URL, params={"q": q, "format": "jsonv2", "limit": 1, "accept-language": "en"})
+            r.raise_for_status()
+            rows = r.json()
+            first = rows[0] if isinstance(rows, list) and rows else None
+            if first and first.get("lat") and first.get("lon"):
+                return (float(first["lat"]), float(first["lon"]))
+    return None
+
+
+async def geocode_course(name: str, location: str):
+    """Forward-geocode a course to (lat, lng) via OSM Nominatim. Cached in Mongo
+    (positive + negative), rate-limited to <=1 req/sec, and never raises — returns
+    None on any failure so course creation/backfill keeps working offline."""
+    name = (name or "").strip()
+    location = (location or "").strip()
+    if not name:
+        return None
+    key = hashlib.sha256(f"{name.casefold()}|{location.casefold()}".encode()).hexdigest()
+    cached = await db.geocode_cache.find_one({"_id": key})
+    if cached and (cached.get("lat") is not None or time.time() - cached.get("updated_at", 0) < 7 * 86400):
+        return (cached["lat"], cached["lon"]) if cached.get("lat") is not None else None
+    # "&" and pasted map-link locations hurt Nominatim; normalise + try variants.
+    q_name = name.replace("&", "and")
+    loc = "" if ("http" in location.lower() or "goo.gl" in location.lower()) else location
+    variants = ([f"{q_name}, {loc}"] if loc else []) + [f"{q_name} Philippines"]
+    result = None
+    for q in variants:
+        try:
+            result = await _nominatim_get(q)
+        except Exception as exc:
+            logger.warning("Nominatim geocode failed for %r: %s", q, exc)
+            result = None
+        if result:
+            break
+    await db.geocode_cache.replace_one(
+        {"_id": key},
+        {"_id": key, "name": name, "location": location, "updated_at": time.time(),
+         "lat": result[0] if result else None, "lon": result[1] if result else None},
+        upsert=True,
+    )
+    return result
+
+
 # ---------- Models ----------
 class LatLng(BaseModel):
     lat: float
@@ -105,6 +166,8 @@ class Course(BaseModel):
     drivingRange: Optional[LatLng] = None
     practiceGreen: Optional[LatLng] = None
     parking: Optional[LatLng] = None
+    layoutSource: str = "simulated"
+    geocoded: bool = False
     createdAt: str = Field(default_factory=now_iso)
     shareCode: Optional[str] = None
 
@@ -203,9 +266,14 @@ async def create_course(course: Course):
     # from the course pin so Course Navigation and every playing feature work
     # everywhere, even before a mapper draws exact points in the editor.
     if not any(h.tee for h in course.holes) and course.latitude is not None and course.longitude is not None:
+        geo = await geocode_course(course.name, course.location)
+        if geo:
+            course.latitude, course.longitude = geo
+            course.geocoded = True
         holes, pois = build_layout(course.latitude, course.longitude, course.holeCount,
                                    [h.par for h in course.holes], [h.handicap for h in course.holes])
         course.holes = holes
+        course.layoutSource = "simulated"
         course.clubhouse = pois["clubhouse"]
         course.drivingRange = pois["drivingRange"]
         course.practiceGreen = pois["practiceGreen"]
@@ -231,6 +299,8 @@ async def get_course(course_id: str):
 @api.put("/courses/{course_id}")
 async def update_course(course_id: str, course: Course):
     course.id = course_id
+    # Saving through the editor means a human has refined this course.
+    course.layoutSource = "mapped"
     existing = await db.courses.find_one({"id": course_id}, {"_id": 0})
     if existing and not course.shareCode:
         course.shareCode = existing.get("shareCode")  # never lose an issued code on edit
@@ -710,32 +780,52 @@ def build_layout(base_lat, base_lng, n, pars=None, hcps=None):
 async def seed():
     await db.courses.replace_one({"id": "demo-apo-davao"}, build_demo_course().model_dump(), upsert=True)
     logger.info("Seeded/updated demo course")
-    # Backfill: give every non-demo course a simulated layout + POIs if it was
-    # imported/created without mapped coordinates. Never touch mapped courses.
-    async for c in db.courses.find({"id": {"$ne": "demo-apo-davao"}}):
-        holes = c.get("holes") or []
-        if any(h.get("tee") for h in holes):
-            continue
-        lat, lng = c.get("latitude"), c.get("longitude")
-        if lat is None or lng is None:
-            continue
-        n = c.get("holeCount") or len(holes) or 18
-        new_holes, pois = build_layout(lat, lng, n, [h.get("par") for h in holes], [h.get("handicap") for h in holes])
-        await db.courses.update_one(
-            {"id": c["id"]},
-            {"$set": {
-                "holes": [h.model_dump() for h in new_holes],
-                "clubhouse": pois["clubhouse"].model_dump(),
-                "drivingRange": pois["drivingRange"].model_dump(),
-                "practiceGreen": pois["practiceGreen"].model_dump(),
-                "parking": pois["parking"].model_dump(),
-            }},
-        )
-    logger.info("Backfilled simulated layouts for unmapped courses")
     if not await db.bags.find_one({"id": "default"}):
         await db.bags.insert_one(default_bag().model_dump())
     if not await db.settings.find_one({"id": "default"}):
         await db.settings.insert_one(Settings().model_dump())
+    # Geocode + layout backfill runs in the background so startup isn't held open
+    # for external Nominatim calls (rate-limited to <=1 req/sec).
+    asyncio.create_task(backfill_layouts())
+
+
+async def backfill_layouts():
+    """Give every non-demo course a geocoded, simulated layout + POIs if it hasn't
+    been hand-mapped. Snaps the anchor to the real course location via Nominatim.
+    Never touches a course a mapper has drawn (layoutSource == 'mapped' or has polygons)."""
+    try:
+        await db.geocode_cache.create_index("updated_at")
+        async for c in db.courses.find({"id": {"$ne": "demo-apo-davao"}}):
+            holes = c.get("holes") or []
+            if c.get("layoutSource") == "mapped" or any((h.get("polygons") or []) for h in holes):
+                if not c.get("layoutSource"):
+                    await db.courses.update_one({"id": c["id"]}, {"$set": {"layoutSource": "mapped"}})
+                continue
+            if c.get("geocoded"):
+                continue  # already snapped to its real location
+            lat, lng = c.get("latitude"), c.get("longitude")
+            if lat is None or lng is None:
+                continue
+            geo = await geocode_course(c.get("name", ""), c.get("location", ""))
+            anchor_lat, anchor_lng = geo if geo else (lat, lng)
+            n = c.get("holeCount") or len(holes) or 18
+            new_holes, pois = build_layout(anchor_lat, anchor_lng, n,
+                                           [h.get("par") for h in holes], [h.get("handicap") for h in holes])
+            await db.courses.update_one(
+                {"id": c["id"]},
+                {"$set": {
+                    "latitude": anchor_lat, "longitude": anchor_lng, "geocoded": bool(geo),
+                    "layoutSource": "simulated",
+                    "holes": [h.model_dump() for h in new_holes],
+                    "clubhouse": pois["clubhouse"].model_dump(),
+                    "drivingRange": pois["drivingRange"].model_dump(),
+                    "practiceGreen": pois["practiceGreen"].model_dump(),
+                    "parking": pois["parking"].model_dump(),
+                }},
+            )
+        logger.info("Backfilled geocoded simulated layouts for unmapped courses")
+    except Exception as e:
+        logger.warning("Layout backfill error: %s", e)
 
 
 app.include_router(api)

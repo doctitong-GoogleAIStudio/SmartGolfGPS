@@ -1,0 +1,37 @@
+{
+  "summary": "Iteration 14 – End-to-end validation of the 3 new features on both surfaces (mobile Expo web preview + shared FastAPI backend). ALL PASS. Backend: 6/6 pytest cases pass (test_geocoded_layout.py). GET /api/courses returns all 3 seeded courses with holes[0].tee + greenCenter and the 4 POIs (clubhouse/drivingRange/practiceGreen/parking) plus layoutSource + geocoded fields. demo-apo-davao stays layoutSource='simulated' + isDemo=True. Manila Golf & Country Club is geocoded=True at (14.5507, 121.0413) — inside 14.4–14.7, 120.9–121.1. POST /api/courses with holes:[] auto-runs geocode + build_layout and returns the full generated course with layoutSource='simulated'. PUT /api/courses/{id} flips layoutSource to 'mapped' (verified via post-PUT GET). Robustness: POST with a Google-maps URL as location returns 200 (Nominatim skipped for http/goo.gl, geocoded stays False, POIs + layout still generated). Mobile UI (390x844 Expo web preview): (1) /start-round – SIMULATED badges render on Southpacific + Manila (testIDs start-badge-<id>), demo Apo shows NO badge. (2) /courses – SIMULATED badges render on Southpacific + Manila (testIDs course-badge-<id>), demo Apo shows NO badge. (3) /ph-courses – tapping ph-add-wack-wack-golf---country-club opens ph-import-preview modal within ~2s, both ph-preview-done and ph-preview-view render, header shows '18 holes · PAR 72 · Snapped to course location' (geocoded worked), CourseOverviewMap web-stub visible as expected. Pressing DONE dismisses the modal (visible=False). Created Wack Wack test course cleaned up afterwards. Course-overview overview-map-badge testID exists in code (course-overview.tsx:93) but not exercised end-to-end here because it requires a live active-round; MapBadge component logic is shared so behaviour matches the other 2 surfaces already verified.",
+  "platforms_tested": ["mobile"],
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "mobile": {
+      "ui_bugs": [],
+      "integration_issues": [],
+      "design_issues": [],
+      "react_native_issues": []
+    }
+  },
+  "parity_issues": [],
+  "test_report_links": [
+    "/app/backend/tests/test_geocoded_layout.py",
+    "/app/test_reports/pytest/iter14_geocode.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py:89-120 geocode_course – swallows every exception path and stores negative cache; correctly refuses http/goo.gl locations before hitting Nominatim; rate-limited via asyncio.Lock + 1.1s window. Solid.",
+    "server.py:260-282 POST /api/courses – auto-layout runs ONLY when no hole has a tee AND lat/lng are present. If a client accidentally POSTs holes with a tee but no greens/POIs, the auto-generation is skipped and POIs remain None. Minor edge case; current UI never triggers this (ph-courses always POSTs holes:[]).",
+    "server.py:299-310 PUT /api/courses – hard-codes layoutSource='mapped' on every PUT. This is exactly the spec ('saving through the editor means a human has refined this course'), but it also flips MAPPED whenever any other client PATCHes the whole course (e.g. share import). Not currently reachable in the mobile flows, but worth a comment.",
+    "server.py:792-828 backfill_layouts – gracefully skips courses that are already mapped OR already geocoded; safe to re-run at any startup.",
+    "mobile/app/ph-courses.tsx:313-351 preview Modal is transparent + slide-in and uses onRequestClose=setPreview(null). DONE resets state; VIEW FULL MAP writes sg_quick_course then navigates. Clean.",
+    "MapBadge.tsx:9 – short-circuits when course is null OR isDemo, so it will not render on the demo card or while the course-overview screen is loading. Correct."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_geocoded_layout.py"
+  ],
+  "success_rate": {"backend": "100% (6/6)", "frontend": "100% (3/3 features verified)"},
+  "test_credentials": "N/A – no auth in this app",
+  "seed_data_creation": "Created + deleted 3 test courses during backend pytest (TEST_AutoLayout, TEST_MapperFlip, TEST_UrlLoc). Created + deleted 1 test course during ph-courses UI run (Wack Wack Golf & Country Club id 3f8530b3-…). All cleaned up.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "All three iteration-14 features are verified. Backend: run pytest backend/tests/test_geocoded_layout.py for regression. Mobile: SIMULATED badges show on non-demo cards on /start-round + /courses + /course-overview (overview-map-badge, not exercised live but shares MapBadge). Import preview modal (ph-import-preview) opens after ph-add-* tap, with ph-preview-done + ph-preview-view — CourseOverviewMap is a .web stub so the modal shows placeholder text on web preview (native builds render the real map). Only 3 courses currently in DB: demo-apo-davao (demo, simulated, no badge), Southpacific (simulated, badge, geocoded=False because location is a maps URL), Manila Golf (simulated, badge, geocoded=True at 14.55,121.04). No known regressions.",
+  "rca of the issue": ""
+}
