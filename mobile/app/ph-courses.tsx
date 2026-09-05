@@ -11,6 +11,7 @@ import { haversineMeters } from "@/src/lib/geo";
 import { useSettings } from "@/src/context/SettingsContext";
 import { DirectoryMap } from "@/src/components/DirectoryMap";
 import { CourseOverviewMap } from "@/src/components/CourseOverviewMap";
+import { LayoutAccuracy } from "@/src/components/LayoutAccuracy";
 import { ScreenHeader } from "@/src/components/ui";
 import { toast } from "@/src/lib/toast";
 import { storage } from "@/src/utils/storage";
@@ -331,7 +332,16 @@ export default function PhCourses() {
                 {preview?.holeCount} holes · PAR {(preview?.holes || []).reduce((s: number, h: any) => s + (h.par || 0), 0)}
                 {"  ·  "}{preview?.geocoded ? "Snapped to course location" : "Approximate pin"}
               </Text>
+              <LayoutAccuracy course={preview} showWhy style={{ marginTop: 2 }} testID="ph-preview-accuracy" />
               <Text style={styles.pvHint}>Auto-generated simulated layout — tees, greens, hazards & clubhouse are ready to play. Refine exact points anytime in the Course Editor.{preview?.geocoded ? "  Location © OpenStreetMap contributors." : ""}</Text>
+              <Pressable
+                style={styles.pvAdjust}
+                testID="ph-preview-adjust"
+                onPress={() => { const id = preview?.id; setPreview(null); if (id) router.push(`/courses/${id}/locate`); }}
+              >
+                <Ionicons name="location" size={16} color={colors.charcoal} />
+                <Text style={styles.pvAdjustTxt}>ADJUST LOCATION</Text>
+              </Pressable>
               <View style={{ flexDirection: "row", gap: 10, marginTop: 4 }}>
                 <Pressable style={styles.pvDone} onPress={() => setPreview(null)} testID="ph-preview-done">
                   <Text style={styles.pvDoneTxt}>DONE</Text>
@@ -401,6 +411,8 @@ const styles = StyleSheet.create({
   pvTitle: { fontSize: 18, fontWeight: "900", color: colors.charcoal },
   pvMeta: { fontSize: 12, fontWeight: "800", color: colors.green, letterSpacing: 0.3 },
   pvHint: { fontSize: 12, fontWeight: "600", color: colors.zinc500, lineHeight: 18 },
+  pvAdjust: { height: 48, borderRadius: 14, backgroundColor: colors.zinc100, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
+  pvAdjustTxt: { color: colors.charcoal, fontWeight: "900", letterSpacing: 0.5, fontSize: 12 },
   pvDone: { height: 52, paddingHorizontal: 22, borderRadius: 16, backgroundColor: colors.zinc100, alignItems: "center", justifyContent: "center" },
   pvDoneTxt: { color: colors.charcoal, fontWeight: "900", letterSpacing: 1 },
   pvView: { flex: 1, height: 52, borderRadius: 16, backgroundColor: colors.green, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },

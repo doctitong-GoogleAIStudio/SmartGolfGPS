@@ -1,0 +1,34 @@
+{
+  "summary": "Iteration 15 — end-to-end validation of the 3 new geocoded-layout enhancements on both surfaces (mobile Expo web preview + shared FastAPI backend). ALL PASS. Backend (6/6 pytest cases in test_relocate_bulk.py): (1) POST /api/courses/{id}/relocate regenerates the simulated layout at the requested lat/lng, sets geocoded=true + layoutSource='simulated', returns holes[0].tee + 4 POIs (clubhouse/drivingRange/practiceGreen/parking), and persists via GET; (2) returns 404 for missing course; (3) returns 400 when the course is 'mapped' (flipped via PUT). (4) POST /api/courses/geocode-all returns {courses:N} without 500ing; (5) correctly excludes demo-apo-davao AND mapped courses (baseline+1 after adding a simulated course; back to baseline after PUT-flip to mapped); (6) background bulk re-geocode with force=True keeps the layout intact (18 holes, simulated) and does not crash — Nominatim result is best-effort and was verified via GET polling. Mobile UI (390x844 Expo web preview): (A) /courses — RE-GEOCODE ALL button (regeocode-all-btn) visible, tapping shows the 'Re-geocoding courses… Snapping 2 courses in the background' toast and screen stays mounted; 2 course-accuracy-<id> meters render 'MEDIUM ACCURACY' on Southpacific + Manila; demo Apo has NO meter and NO course-locate-<id> button. Both non-demo cards show course-locate-<id>. (B) /courses/{id}/locate — screen mounts (locate-course-screen), locate-coords shows the current pin '7.06000, 125.52000' for Southpacific, locate-back-btn + locate-save-btn both present, tapping USE THIS LOCATION calls /relocate and navigates to /course-overview with the 'Location confirmed / Layout re-anchored to this spot.' toast. (C) /start-round — 2 start-accuracy-<id> meters render 'MEDIUM ACCURACY' on the 2 non-demo courses; demo Apo has NO meter. (D) /course-overview (after PLAY on Southpacific) — overview-accuracy renders 'MEDIUM ACCURACY · Simulated holes at the real location.' in the header. (E) /ph-courses — tapping ph-add-manila-golf---country-club opens ph-import-preview modal which shows ph-preview-accuracy 'MEDIUM ACCURACY · Simulated holes at the real location.' and ph-preview-adjust; tapping ADJUST LOCATION navigates to /courses/{new-id}/locate with locate-coords '14.55074, 121.04130' (the geocoded Manila Golf clubhouse). Cleaned up 2 duplicate Manila Golf courses created during the ph-adjust flow test.",
+  "platforms_tested": ["mobile"],
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "mobile": {"ui_bugs": [], "integration_issues": [], "design_issues": [], "react_native_issues": []}
+  },
+  "parity_issues": [],
+  "test_report_links": [
+    "/app/backend/tests/test_relocate_bulk.py",
+    "/app/test_reports/pytest/iter15_relocate.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py:383-392 POST /api/courses/{id}/relocate — clean: 404 first, 400 on mapped, then _apply_layout (which reuses the shared build_layout so pars/hcps carry over). Returns {**c, **upd} so the client gets the full course back in one round-trip. Solid.",
+    "server.py:395-414 POST /api/courses/geocode-all — kicks off asyncio.create_task(_bulk_geocode(ids)) with an immediate 200 {courses:N}. Good UX (non-blocking) but note: nothing surfaces bulk-completion to the client except the count; the mobile toast timer at courses/index.tsx:170 uses `n * 2600 + 1500` to poll — okay heuristic but drifts if Nominatim is slow. Acceptable given the toast is 'refresh in a moment' phrasing.",
+    "server.py:403-413 _bulk_geocode — swallows a per-course geocode failure with `if not geo: continue` (correct — 1 slow row shouldn't block the rest). force=True path bypasses the Mongo geocode_cache so a stale negative-cache row can be overcome.",
+    "server.py:370-380 _apply_layout — regenerates holes preserving par/handicap arrays, resets layoutSource to 'simulated' and re-emits all 4 POIs. Symmetric with the initial POST /courses auto-layout path.",
+    "server.py:388 400 check compares c.get('layoutSource') == 'mapped' — correct, guards against overwriting a hand-mapped course. NOTE: server.py:300-311 PUT /courses hard-codes layoutSource='mapped' unconditionally, so any prior PUT to a simulated course also protects it from relocate. Consistent with the editor-flow spec.",
+    "mobile/src/components/LayoutAccuracy.tsx:18 — early-returns null when course.isDemo, so the demo card never renders the meter (verified). Level buckets (mapped→HIGH, geocoded→MEDIUM, else→LOW) match the spec.",
+    "mobile/app/courses/[id]/locate.tsx:36-42 — save() posts to /relocate then router.replace('/course-overview'). Note it does NOT setItem('sg_quick_course', id) so /course-overview will render 'course null' unless the user already picked this course. Minor UX gap — course-overview safely no-ops (MapBadge + accuracy short-circuit on null). Consider setting sg_quick_course right before replace to guarantee the relocated course is the one shown.",
+    "mobile/app/courses/index.tsx:203-208 — regeocode button visibility guard `courses.some((c) => !c.isDemo && c.layoutSource !== 'mapped')` matches the backend filter (demo + mapped excluded). Good parity."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_relocate_bulk.py"
+  ],
+  "success_rate": {"backend": "100% (6/6)", "frontend": "100% (7/7 feature checkpoints verified)"},
+  "test_credentials": "N/A — no auth in this app",
+  "seed_data_creation": "Backend pytest created + deleted 4 test courses (TEST_Relocate_A, TEST_Relocate_Mapped, TEST_GeocodeAll_A, TEST_GeocodeAll_Mapped, TEST_BulkSnap_ManilaGolf) — all cleaned up. UI test triggered 2 duplicate 'Manila Golf & Country Club' courses via ph-add tap (needed to exercise ph-preview-adjust); both duplicates were deleted afterwards. DB is back to the 3 baseline courses: demo-apo-davao, Southpacific (5dcfcc4a…), Manila Golf (dc2f1c3c…).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "All 3 iteration-15 enhancements verified. Backend regression: pytest backend/tests/test_relocate_bulk.py -o addopts='' (6/6). Mobile: courses/index.tsx correctly hides regeocode-all-btn + course-locate-<id> + course-accuracy-<id> for the demo AND for mapped courses; start-round + course-overview + ph-courses use the shared LayoutAccuracy component so they mirror the same behaviour. The GolfMap web stub means the locate-screen shows a solid-charcoal map area with a 'Satellite map — Live map renders on the mobile app' placeholder — expected on the web preview per the .web.tsx stub. If a future test wants to verify the actual pin-drag, run against a native build. Note the minor UX gap in locate.tsx where router.replace('/course-overview') does not set sg_quick_course — reported under critical_code_review_comments.",
+  "rca of the issue": ""
+}

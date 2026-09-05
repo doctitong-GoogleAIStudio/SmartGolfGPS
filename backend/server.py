@@ -86,7 +86,7 @@ async def _nominatim_get(q: str):
     return None
 
 
-async def geocode_course(name: str, location: str):
+async def geocode_course(name: str, location: str, force: bool = False):
     """Forward-geocode a course to (lat, lng) via OSM Nominatim. Cached in Mongo
     (positive + negative), rate-limited to <=1 req/sec, and never raises — returns
     None on any failure so course creation/backfill keeps working offline."""
@@ -95,9 +95,10 @@ async def geocode_course(name: str, location: str):
     if not name:
         return None
     key = hashlib.sha256(f"{name.casefold()}|{location.casefold()}".encode()).hexdigest()
-    cached = await db.geocode_cache.find_one({"_id": key})
-    if cached and (cached.get("lat") is not None or time.time() - cached.get("updated_at", 0) < 7 * 86400):
-        return (cached["lat"], cached["lon"]) if cached.get("lat") is not None else None
+    if not force:
+        cached = await db.geocode_cache.find_one({"_id": key})
+        if cached and (cached.get("lat") is not None or time.time() - cached.get("updated_at", 0) < 7 * 86400):
+            return (cached["lat"], cached["lon"]) if cached.get("lat") is not None else None
     # "&" and pasted map-link locations hurt Nominatim; normalise + try variants.
     q_name = name.replace("&", "and")
     loc = "" if ("http" in location.lower() or "goo.gl" in location.lower()) else location
@@ -359,6 +360,58 @@ async def import_course(body: dict):
     await db.courses.insert_one(clone)
     clone.pop("_id", None)
     return clone
+
+
+class RelocateBody(BaseModel):
+    latitude: float
+    longitude: float
+
+
+def _apply_layout(c: dict, lat: float, lng: float, geocoded: bool) -> dict:
+    """Regenerate a simulated layout + POIs anchored at (lat, lng), preserving pars/hcps."""
+    holes_src = c.get("holes") or []
+    n = c.get("holeCount") or len(holes_src) or 18
+    new_holes, pois = build_layout(lat, lng, n, [h.get("par") for h in holes_src], [h.get("handicap") for h in holes_src])
+    return {
+        "latitude": lat, "longitude": lng, "geocoded": geocoded, "layoutSource": "simulated",
+        "holes": [h.model_dump() for h in new_holes],
+        "clubhouse": pois["clubhouse"].model_dump(), "drivingRange": pois["drivingRange"].model_dump(),
+        "practiceGreen": pois["practiceGreen"].model_dump(), "parking": pois["parking"].model_dump(),
+    }
+
+
+@api.post("/courses/{course_id}/relocate")
+async def relocate_course(course_id: str, body: RelocateBody):
+    c = await db.courses.find_one({"id": course_id}, {"_id": 0})
+    if not c:
+        raise HTTPException(404, "Course not found")
+    if c.get("layoutSource") == "mapped":
+        raise HTTPException(400, "This course is hand-mapped — adjust it in the Course Editor instead.")
+    upd = _apply_layout(c, body.latitude, body.longitude, True)  # human-confirmed location
+    await db.courses.update_one({"id": course_id}, {"$set": upd})
+    return {**c, **upd}
+
+
+@api.post("/courses/geocode-all")
+async def geocode_all():
+    """Re-geocode all saved, non-mapped courses on demand (runs in the background)."""
+    ids = [c["id"] async for c in db.courses.find({"id": {"$ne": "demo-apo-davao"}, "layoutSource": {"$ne": "mapped"}}, {"id": 1})]
+    asyncio.create_task(_bulk_geocode(ids))
+    return {"courses": len(ids)}
+
+
+async def _bulk_geocode(ids):
+    snapped = 0
+    for cid in ids:
+        c = await db.courses.find_one({"id": cid}, {"_id": 0})
+        if not c or c.get("layoutSource") == "mapped":
+            continue
+        geo = await geocode_course(c.get("name", ""), c.get("location", ""), force=True)
+        if not geo:
+            continue
+        await db.courses.update_one({"id": cid}, {"$set": _apply_layout(c, geo[0], geo[1], True)})
+        snapped += 1
+    logger.info("Bulk geocode complete: %d/%d snapped", snapped, len(ids))
 
 
 @api.get("/tools/activation-generator")

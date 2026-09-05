@@ -12,6 +12,7 @@ import { ScreenHeader } from "@/src/components/ui";
 import { toast } from "@/src/lib/toast";
 import { boundsForCourse } from "@/src/lib/geo";
 import { MapBadge } from "@/src/components/MapBadge";
+import { LayoutAccuracy } from "@/src/components/LayoutAccuracy";
 import { offlineSupported, listOfflineCourseIds, downloadCourseTiles, deleteCourseTiles, getOfflineUsage, clearAllOffline } from "@/src/lib/offline";
 
 export default function Courses() {
@@ -160,6 +161,18 @@ export default function Courses() {
     router.push(`/courses/${r.id}/edit`);
   };
 
+  const regeocode = async () => {
+    try {
+      const r = await api.post("/courses/geocode-all");
+      const n = r.courses || 0;
+      if (!n) { toast.info("Nothing to geocode", "Your courses are already snapped or hand-mapped."); return; }
+      toast.info("Re-geocoding courses…", `Snapping ${n} course${n === 1 ? "" : "s"} in the background — cards refresh in a moment.`);
+      setTimeout(load, n * 2600 + 1500);
+    } catch {
+      toast.error("Could not start geocoding");
+    }
+  };
+
   const remove = (id: string) => {
     Alert.alert("Delete this course?", "", [
       { text: "Cancel", style: "cancel" },
@@ -187,6 +200,12 @@ export default function Courses() {
           <Text style={styles.phBtnTxt}>BROWSE PHILIPPINE COURSES</Text>
           <Ionicons name="chevron-forward" size={16} color="rgba(255,255,255,0.5)" />
         </Pressable>
+        {courses.some((c) => !c.isDemo && c.layoutSource !== "mapped") && (
+          <Pressable style={styles.regeoBtn} onPress={regeocode} testID="regeocode-all-btn">
+            <Ionicons name="navigate-circle" size={18} color={colors.green} />
+            <Text style={styles.regeoTxt}>RE-GEOCODE ALL COURSES</Text>
+          </Pressable>
+        )}
         {offlineSupported && courses.length > 0 && courses.some((c) => !offlineIds.has(c.id)) && (
           <Pressable style={styles.saveAllBtn} onPress={downloadAll} disabled={bulkBusy} testID="download-all-offline-btn">
             <Ionicons name={bulkBusy ? "cloud-download" : "cloud-download-outline"} size={18} color={colors.green} />
@@ -209,6 +228,7 @@ export default function Courses() {
             <Text style={[styles.cName, { fontFamily: font.headBold }]}>{c.name}</Text>
             <Text style={styles.cMeta}>{c.location} · {c.holeCount} holes {c.isDemo ? "· DEMO DATA" : ""}</Text>
             <MapBadge course={c} style={{ marginTop: 8 }} testID={`course-badge-${c.id}`} />
+            <LayoutAccuracy course={c} style={{ marginTop: 6 }} testID={`course-accuracy-${c.id}`} />
             <View style={{ flexDirection: "row", gap: 8, marginTop: 12 }}>
               <Pressable style={styles.playBtn} testID={`course-play-${c.id}`} onPress={async () => { await storage.setItem("sg_quick_course", c.id); router.push("/play"); }}>
                 <Ionicons name="locate" size={16} color="#fff" />
@@ -222,6 +242,11 @@ export default function Courses() {
                 <Ionicons name="share-social" size={16} color={colors.charcoal} />
                 <Text style={styles.editTxt}>SHARE</Text>
               </Pressable>
+              {!c.isDemo && c.layoutSource !== "mapped" && (
+                <Pressable style={styles.editBtn} testID={`course-locate-${c.id}`} onPress={() => router.push(`/courses/${c.id}/locate`)}>
+                  <Ionicons name="location" size={16} color={colors.charcoal} />
+                </Pressable>
+              )}
               <Pressable style={styles.delBtn} testID={`course-delete-${c.id}`} onPress={() => remove(c.id)}>
                 <Ionicons name="trash" size={16} color={colors.red} />
               </Pressable>
@@ -296,6 +321,8 @@ const styles = StyleSheet.create({
   importBtnTxt: { color: colors.green, fontWeight: "900", letterSpacing: 1.5 },
   phBtn: { height: 52, borderRadius: 16, backgroundColor: colors.charcoal, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, paddingHorizontal: 16 },
   phBtnTxt: { color: "#fff", fontWeight: "900", letterSpacing: 1, fontSize: 13 },
+  regeoBtn: { height: 48, borderRadius: 14, backgroundColor: "rgba(20,83,45,0.08)", borderWidth: 1, borderColor: colors.green, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
+  regeoTxt: { color: colors.green, fontWeight: "900", letterSpacing: 0.5, fontSize: 12 },
   saveAllBtn: { height: 48, borderRadius: 14, backgroundColor: "rgba(20,83,45,0.08)", borderWidth: 1, borderColor: colors.green, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
   saveAllTxt: { color: colors.green, fontWeight: "900", letterSpacing: 0.5, fontSize: 12 },
   storageRow: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: "#fff", borderWidth: 1, borderColor: colors.zinc200, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 10 },

@@ -8,6 +8,7 @@ import { cachedGet, getActiveRound, setActiveRound } from "@/src/lib/api";
 import { storage } from "@/src/utils/storage";
 import { CourseOverviewMap } from "@/src/components/CourseOverviewMap";
 import { MapBadge } from "@/src/components/MapBadge";
+import { LayoutAccuracy } from "@/src/components/LayoutAccuracy";
 import { useGPS } from "@/src/hooks/useGPS";
 import { useSettings } from "@/src/context/SettingsContext";
 import { haversineMeters, bearingDeg, fmtDist, unitLabel } from "@/src/lib/geo";
@@ -91,6 +92,7 @@ export default function CourseOverview() {
           <Text style={styles.courseName} numberOfLines={1}>{course?.name || "Course Overview"}</Text>
           <Text style={styles.courseMeta}>{holes.length} HOLES · PAR {totals.par}{totals.meters ? ` · ${fmtDist(totals.meters, unit)} ${unitLabel(unit)}` : ""}</Text>
           <MapBadge course={course} style={{ marginTop: 6 }} testID="overview-map-badge" />
+          <LayoutAccuracy course={course} showWhy style={{ marginTop: 6 }} testID="overview-accuracy" />
         </View>
       </View>
 

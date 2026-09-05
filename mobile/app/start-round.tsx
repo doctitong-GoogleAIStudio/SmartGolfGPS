@@ -7,6 +7,7 @@ import { api, cachedGet, getActiveRound, setActiveRound, ActiveRound } from "@/s
 import { storage } from "@/src/utils/storage";
 import { ScreenHeader, Overline } from "@/src/components/ui";
 import { MapBadge } from "@/src/components/MapBadge";
+import { LayoutAccuracy } from "@/src/components/LayoutAccuracy";
 import { toast } from "@/src/lib/toast";
 
 export default function StartRound() {
@@ -59,6 +60,7 @@ export default function StartRound() {
                 <Text style={styles.courseName}>{c.name}</Text>
                 <Text style={styles.courseMeta}>{c.location} · {c.holeCount} holes {c.isDemo ? "· DEMO DATA" : ""}</Text>
                 <MapBadge course={c} style={{ marginTop: 8 }} testID={`start-badge-${c.id}`} />
+                <LayoutAccuracy course={c} style={{ marginTop: 6 }} testID={`start-accuracy-${c.id}`} />
               </Pressable>
             ))}
           </View>
