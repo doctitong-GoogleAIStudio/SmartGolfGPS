@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { View, Text, StyleSheet, Pressable, ScrollView, TextInput, ActivityIndicator, Modal } from "react-native";
+import { View, Text, StyleSheet, Pressable, ScrollView, TextInput, ActivityIndicator } from "react-native";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Location from "expo-location";
@@ -10,8 +10,6 @@ import { api } from "@/src/lib/api";
 import { haversineMeters } from "@/src/lib/geo";
 import { useSettings } from "@/src/context/SettingsContext";
 import { DirectoryMap } from "@/src/components/DirectoryMap";
-import { CourseOverviewMap } from "@/src/components/CourseOverviewMap";
-import { LayoutAccuracy } from "@/src/components/LayoutAccuracy";
 import { ScreenHeader } from "@/src/components/ui";
 import { toast } from "@/src/lib/toast";
 import { storage } from "@/src/utils/storage";
@@ -64,7 +62,6 @@ export default function PhCourses() {
   const [locating, setLocating] = useState(false);
   const [regionFilter, setRegionFilter] = useState<string>("");
   const [recent, setRecent] = useState<Entry[]>([]);
-  const [preview, setPreview] = useState<any>(null);
 
   const fmtDistance = (meters: number) => {
     if (imperial) {
@@ -154,7 +151,8 @@ export default function PhCourses() {
         storage.setItem(RECENT_KEY, JSON.stringify(next));
         return next;
       });
-      setPreview(created);
+      toast.success(`Added "${c.name}"`, "Confirm its location next.");
+      router.push(`/courses/${created.id}/locate`);
     } catch {
       toast.error("Could not add course");
     }
@@ -310,55 +308,6 @@ export default function PhCourses() {
         <Text style={styles.note}>Locations are approximate pins. Added courses start with a par-72 layout — map each hole's tee & greens in the Course Editor or on-site with GPS.</Text>
       </ScrollView>
       )}
-
-      <Modal visible={!!preview} transparent animationType="slide" onRequestClose={() => setPreview(null)}>
-        <View style={styles.pvBackdrop}>
-          <View style={styles.pvSheet} testID="ph-import-preview">
-            <View style={styles.pvMapWrap}>
-              <CourseOverviewMap
-                holes={preview?.holes || []}
-                pois={[
-                  preview?.clubhouse && { key: "club", label: "Clubhouse", pt: preview.clubhouse },
-                  preview?.drivingRange && { key: "range", label: "Range", pt: preview.drivingRange },
-                  preview?.practiceGreen && { key: "pg", label: "Practice", pt: preview.practiceGreen },
-                  preview?.parking && { key: "park", label: "Parking", pt: preview.parking },
-                ].filter(Boolean) as any}
-                onHolePress={() => {}}
-              />
-            </View>
-            <View style={styles.pvBody}>
-              <Text style={styles.pvTitle} numberOfLines={1}>{preview?.name}</Text>
-              <Text style={styles.pvMeta}>
-                {preview?.holeCount} holes · PAR {(preview?.holes || []).reduce((s: number, h: any) => s + (h.par || 0), 0)}
-                {"  ·  "}{preview?.geocoded ? "Snapped to course location" : "Approximate pin"}
-              </Text>
-              <LayoutAccuracy course={preview} showWhy style={{ marginTop: 2 }} testID="ph-preview-accuracy" />
-              <Text style={styles.pvHint}>Auto-generated simulated layout — tees, greens, hazards & clubhouse are ready to play. Refine exact points anytime in the Course Editor.{preview?.geocoded ? "  Location © OpenStreetMap contributors." : ""}</Text>
-              <Pressable
-                style={styles.pvAdjust}
-                testID="ph-preview-adjust"
-                onPress={() => { const id = preview?.id; setPreview(null); if (id) router.push(`/courses/${id}/locate`); }}
-              >
-                <Ionicons name="location" size={16} color={colors.charcoal} />
-                <Text style={styles.pvAdjustTxt}>ADJUST LOCATION</Text>
-              </Pressable>
-              <View style={{ flexDirection: "row", gap: 10, marginTop: 4 }}>
-                <Pressable style={styles.pvDone} onPress={() => setPreview(null)} testID="ph-preview-done">
-                  <Text style={styles.pvDoneTxt}>DONE</Text>
-                </Pressable>
-                <Pressable
-                  style={styles.pvView}
-                  testID="ph-preview-view"
-                  onPress={async () => { const id = preview?.id; setPreview(null); if (id) { await storage.setItem("sg_quick_course", id); router.push("/course-overview"); } }}
-                >
-                  <Ionicons name="map" size={16} color="#fff" />
-                  <Text style={styles.pvViewTxt}>VIEW FULL MAP</Text>
-                </Pressable>
-              </View>
-            </View>
-          </View>
-        </View>
-      </Modal>
     </View>
   );
 }
@@ -404,17 +353,4 @@ const styles = StyleSheet.create({
   addTxt: { color: "#fff", fontWeight: "900", fontSize: 12 },
   empty: { textAlign: "center", color: colors.zinc400, fontWeight: "700", marginTop: 40 },
   note: { fontSize: 11, color: colors.zinc400, fontWeight: "600", lineHeight: 16, marginTop: 16 },
-  pvBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.7)", justifyContent: "flex-end" },
-  pvSheet: { backgroundColor: "#fff", borderTopLeftRadius: 24, borderTopRightRadius: 24, overflow: "hidden" },
-  pvMapWrap: { height: 300, backgroundColor: colors.charcoal, position: "relative" },
-  pvBody: { padding: 20, gap: 8 },
-  pvTitle: { fontSize: 18, fontWeight: "900", color: colors.charcoal },
-  pvMeta: { fontSize: 12, fontWeight: "800", color: colors.green, letterSpacing: 0.3 },
-  pvHint: { fontSize: 12, fontWeight: "600", color: colors.zinc500, lineHeight: 18 },
-  pvAdjust: { height: 48, borderRadius: 14, backgroundColor: colors.zinc100, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
-  pvAdjustTxt: { color: colors.charcoal, fontWeight: "900", letterSpacing: 0.5, fontSize: 12 },
-  pvDone: { height: 52, paddingHorizontal: 22, borderRadius: 16, backgroundColor: colors.zinc100, alignItems: "center", justifyContent: "center" },
-  pvDoneTxt: { color: colors.charcoal, fontWeight: "900", letterSpacing: 1 },
-  pvView: { flex: 1, height: 52, borderRadius: 16, backgroundColor: colors.green, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
-  pvViewTxt: { color: "#fff", fontWeight: "900", letterSpacing: 1 },
 });

@@ -1,0 +1,38 @@
+{
+  "summary": "Iteration 16 — end-to-end validation of the 3 new UX enhancements (Accuracy Filter, Confirm-On-Import, Nearby Search) plus regressions on both surfaces. Backend 10/10 pytest (/app/backend/tests/test_iter16_search_and_regressions.py): (a) GET /api/geocode/search: empty q → {results:[]}, 1-char q → {results:[]}, valid q ('Wack Wack' biased near 14.58,121.04) → results[] with {name,lat,lng} shape, junk unicode never 500s. (b) POST /api/courses still returns the full generated course (18 holes with tee+greenCenter, all 4 POIs, layoutSource='simulated', id assigned). (c) POST /api/courses/{id}/relocate: 404 on missing, 200 (geocoded=true, coords updated) on simulated, 400 after flipping to mapped via PUT. (d) POST /api/courses/geocode-all returns {courses:N} where N matches (non-demo, non-mapped) count — verified after PUT-flip N drops correctly. Mobile UI (390x844 Expo web preview): (1) /start-round — start-acc-filter-row + 4 chips present. ALL shows all 3 baseline courses (Apo demo + 2 MEDIUM). HIGH shows start-acc-empty message with 0 cards. MEDIUM shows exactly the 2 geocoded courses. Auto-select works: selecting demo then flipping to MEDIUM auto-selects the first visible MEDIUM course, and START ROUND successfully creates a round and navigates to /course-overview with the 'Round started — good luck!' toast. Both non-demo cards render start-badge-{id} + start-accuracy-{id} (2 meters, 'MEDIUM ACCURACY'); demo Apo shows neither. (2) /ph-courses — tapping ph-add-alta-vista-golf---country-club immediately navigates to /courses/{new-id}/locate (locate-course-screen mounts). The old ph-import-preview modal is CONFIRMED GONE (query returned null). (3) /courses/{id}/locate — locate-search-input + locate-search-btn present. Submitting 'Wack Wack' calls /api/geocode/search and renders locate-results with 6 locate-result-{i} rows; tapping a result updates locate-coords readout (10.28000,123.85000 → 13.74007,-16.05685) and clears the results list. A second search ('Cebu City') worked and USE THIS LOCATION (locate-save-btn) successfully calls /relocate and navigates to /course-overview. Cleaned up the Alta Vista test course + the extra active round created during testing — DB back to 3 baseline courses (demo-apo-davao, Southpacific, Manila Golf & Country Club).",
+  "platforms_tested": ["mobile"],
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "mobile": {
+      "ui_bugs": [],
+      "integration_issues": [],
+      "design_issues": [],
+      "react_native_issues": []
+    }
+  },
+  "parity_issues": [],
+  "test_report_links": [
+    "/app/backend/tests/test_iter16_search_and_regressions.py",
+    "/app/test_reports/pytest/iter16_search.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py:426-441 GET /api/geocode/search — solid: 2-char guard returns {results:[]} without hitting Nominatim; viewbox is only applied when both lat+lng provided (0.4° box ≈44km — reasonable bias, not restrictive); wrapped in try/except so a Nominatim outage returns {results:[]} rather than 500. Good hardening.",
+    "server.py:89-109 _nominatim_search — reuses the shared _geo_lock + 1.1s rate-limit throttle so /geocode/search shares the same politeness budget as forward-geocoding; important because a user typing quickly could otherwise spam Nominatim. Returns display_name in full — mobile UI shows the first comma-part in the input (locate.tsx:69) which is fine, but the results list itself shows the full 'display_name' which can be verbose (e.g. 'Arrondissement de Wack Ngouna, Département de Nioro du Rip, Kaolack, Senegal'). Consider trimming to name+region.",
+    "mobile/app/courses/[id]/locate.tsx:64-70 pick() — sets pin, bumps recenterKey, clears results, and prefills the search input with the picked place's short name. Correct.",
+    "mobile/app/courses/[id]/locate.tsx:51-63 doSearch — 2-char min guard (matches backend); no debounce on typing (search is submit-only, which is fine). On empty results shows a toast — good UX. No 'clear results' when user starts typing a new query, so stale results linger under a new input — minor.",
+    "mobile/app/ph-courses.tsx:144-160 addCourse — after POST navigates directly to /courses/{id}/locate. This is the new Confirm-On-Import behaviour and correctly removes the previous ph-import-preview modal path. Also records to Recently Added.",
+    "mobile/app/start-round.tsx:30-37 visibleCourses + auto-select — filter uses accuracyLevel(c)?.label === accFilter, and a useEffect re-picks the first visible course when the current selection is filtered out. Verified working: selecting demo Apo, flipping to MEDIUM, and pressing START ROUND started a round on the first MEDIUM course. Solid.",
+    "mobile/app/start-round.tsx filter + accuracyLevel — NOTE: accuracyLevel() does NOT check course.isDemo, so demo-apo-davao is classified as 'LOW' by the filter (falls through to LOW branch because it isn't geocoded). This means selecting the LOW chip shows the demo course as the only visible entry (not an empty state). LayoutAccuracy the component correctly hides the badge for demo, but the FILTER still includes it. Not a bug per current spec (spec explicitly calls out HIGH/MEDIUM/empty cases but leaves LOW behaviour unspecified) — flag only if you want demo excluded from all accuracy buckets."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter16_search_and_regressions.py"
+  ],
+  "success_rate": {"backend": "100% (10/10)", "frontend": "100% (all 6 feature checkpoints verified)"},
+  "test_credentials": "N/A — no auth in this app",
+  "seed_data_creation": "Backend pytest: created + deleted 1 course (TEST_Iter16_Search). UI test: created + deleted 1 course (Alta Vista Golf & Country Club, id 8db6f0db-…). UI test also created 1 active round on Southpacific which was deleted. DB is back to the 3 baseline courses (demo-apo-davao, Southpacific 5dcfcc4a…, Manila Golf dc2f1c3c…).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "All 3 iteration-16 enhancements PASS. Regressions verified. Reproduce backend with: pytest /app/backend/tests/test_iter16_search_and_regressions.py -o addopts='' (10/10). Note that /geocode/search viewbox biases but does NOT restrict — Nominatim can return far-away hits ('Wack Wack' near Cebu 10.28,123.85 returned Senegal results). This is expected Nominatim behaviour; the client just shows whatever comes back. One optional trim discussed in code review (display_name is verbose — consider trimming server-side). No blocking issues.",
+  "rca of the issue": ""
+}

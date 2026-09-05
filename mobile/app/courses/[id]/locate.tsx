@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { View, Text, StyleSheet, Pressable, ActivityIndicator } from "react-native";
+import { View, Text, StyleSheet, Pressable, ActivityIndicator, TextInput, ScrollView } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -17,6 +17,10 @@ export default function LocateCourse() {
   const [course, setCourse] = useState<any>(null);
   const [pin, setPin] = useState<LatLng | null>(null);
   const [saving, setSaving] = useState(false);
+  const [q, setQ] = useState("");
+  const [results, setResults] = useState<any[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [recenterKey, setRecenterKey] = useState(0);
 
   useEffect(() => {
     api.get(`/courses/${id}`)
@@ -44,18 +48,75 @@ export default function LocateCourse() {
     }
   };
 
+  const doSearch = async () => {
+    const term = q.trim();
+    if (term.length < 2) { toast.info("Type at least 2 letters"); return; }
+    setSearching(true);
+    try {
+      const r = await api.get(`/geocode/search?q=${encodeURIComponent(term)}&lat=${pin.lat}&lng=${pin.lng}`);
+      setResults(r.results || []);
+      if (!(r.results || []).length) toast.info("No places found", "Try a different name.");
+    } catch {
+      toast.error("Search failed");
+    }
+    setSearching(false);
+  };
+
+  const pick = (res: any) => {
+    setPin({ lat: res.lat, lng: res.lng });
+    setRecenterKey((k) => k + 1);
+    setResults([]);
+    setQ(res.name.split(",")[0]);
+  };
+
   return (
     <View style={styles.screen} testID="locate-course-screen">
-      <GolfMap center={pin} zoom={16} mapType="hybrid" target={pin} onTargetDrag={setPin} onMapPress={setPin} />
+      <GolfMap center={pin} recenterKey={recenterKey} zoom={16} mapType="hybrid" target={pin} onTargetDrag={setPin} onMapPress={setPin} />
 
       <View style={[styles.top, { top: insets.top + 8 }]} pointerEvents="box-none">
-        <Pressable style={styles.iconBtn} onPress={() => router.back()} testID="locate-back-btn">
-          <Ionicons name="chevron-back" size={20} color={colors.charcoal} />
-        </Pressable>
-        <View style={styles.titleCard}>
-          <Text style={styles.title} numberOfLines={1}>{course.name}</Text>
-          <Text style={styles.sub}>Drag the pin to the clubhouse, or tap the map</Text>
+        <View style={styles.topRow}>
+          <Pressable style={styles.iconBtn} onPress={() => router.back()} testID="locate-back-btn">
+            <Ionicons name="chevron-back" size={20} color={colors.charcoal} />
+          </Pressable>
+          <View style={styles.titleCard}>
+            <Text style={styles.title} numberOfLines={1}>{course.name}</Text>
+            <Text style={styles.sub}>Drag the pin, tap the map, or search below</Text>
+          </View>
         </View>
+
+        <View style={styles.searchCard}>
+          <Ionicons name="search" size={16} color={colors.zinc400} />
+          <TextInput
+            testID="locate-search-input"
+            value={q}
+            onChangeText={setQ}
+            onSubmitEditing={doSearch}
+            returnKeyType="search"
+            placeholder="Search a nearby place or landmark"
+            placeholderTextColor={colors.zinc400}
+            style={styles.searchInput}
+          />
+          {searching ? (
+            <ActivityIndicator size="small" color={colors.green} />
+          ) : (
+            <Pressable onPress={doSearch} testID="locate-search-btn" hitSlop={8}>
+              <Ionicons name="arrow-forward-circle" size={24} color={colors.green} />
+            </Pressable>
+          )}
+        </View>
+
+        {results.length > 0 && (
+          <View style={styles.results} testID="locate-results">
+            <ScrollView keyboardShouldPersistTaps="handled">
+              {results.map((r, i) => (
+                <Pressable key={i} onPress={() => pick(r)} style={styles.resultRow} testID={`locate-result-${i}`}>
+                  <Ionicons name="location-outline" size={16} color={colors.green} />
+                  <Text style={styles.resultTxt} numberOfLines={2}>{r.name}</Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+          </View>
+        )}
       </View>
 
       <View style={[styles.bottom, { paddingBottom: insets.bottom + 12 }]} pointerEvents="box-none">
@@ -81,7 +142,13 @@ export default function LocateCourse() {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.charcoal },
   loading: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.bg },
-  top: { position: "absolute", left: 12, right: 12, flexDirection: "row", alignItems: "center", gap: 8, zIndex: 20 },
+  top: { position: "absolute", left: 12, right: 12, gap: 8, zIndex: 20 },
+  topRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  searchCard: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: "#fff", borderRadius: 14, paddingHorizontal: 12, height: 46, elevation: 4 },
+  searchInput: { flex: 1, fontSize: 13, fontWeight: "600", color: colors.charcoal },
+  results: { backgroundColor: "#fff", borderRadius: 14, maxHeight: 220, overflow: "hidden", elevation: 4 },
+  resultRow: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 12, paddingVertical: 11, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.zinc200 },
+  resultTxt: { flex: 1, fontSize: 12, fontWeight: "600", color: colors.charcoal },
   iconBtn: { height: 44, width: 44, borderRadius: 14, backgroundColor: "#fff", alignItems: "center", justifyContent: "center", elevation: 4 },
   titleCard: { flex: 1, backgroundColor: "#fff", borderRadius: 14, paddingHorizontal: 14, paddingVertical: 8, elevation: 4 },
   title: { fontWeight: "900", fontSize: 14, color: colors.charcoal },

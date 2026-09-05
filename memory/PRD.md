@@ -185,3 +185,10 @@ iteration_3 (mobile enhancements): 4/4 PASS (GCash QR, Weather On Card, Voice Ca
 - Bulk Geocode (backend+mobile): POST /api/courses/geocode-all returns {courses:N} and runs _bulk_geocode() in the background (force=True bypasses cache, snaps non-mapped courses, regenerates layout). geocode_course() gained a force param. Courses screen has RE-GEOCODE ALL (regeocode-all-btn), shown when non-mapped courses exist; toast + delayed reload.
 - Verified: iteration_15.json — backend 6/6 pytest (/app/backend/tests/test_relocate_bulk.py), mobile all screens/controls verified on Expo web preview. Fixed the flagged sg_quick_course gap in locate.tsx. No open bugs.
 
+
+### Accuracy Filter + Confirm-on-Import + Nearby Search (2026-06)
+- Accuracy Filter (start-round.tsx): horizontal chip row ALL/HIGH/MEDIUM/LOW (testIDs start-acc-filter-{all|high|medium|low}) filtering courses via accuracyLevel(); demo excluded from non-ALL filters; auto-reselects first visible course when the current one is hidden; empty-state message (start-acc-empty).
+- Confirm-on-Import (ph-courses.tsx): tapping ADD now creates the course and routes straight to /courses/{id}/locate to confirm the pin before the first round. The old import preview modal was removed (state/JSX/styles/imports deleted).
+- Nearby Search (locate.tsx + backend GET /api/geocode/search?q=&lat=&lng=): search a place by name (biased near current pin via viewbox), tap a result to drop the pin (GolfMap recenterKey bumps camera). Backend _nominatim_search() helper; returns {results:[{name,lat,lng}]}, {results:[]} for <2 chars, never 500s.
+- Verified: iteration_16.json — backend 10/10 pytest (/app/backend/tests/test_iter16_search_and_regressions.py), mobile all flows verified on Expo web preview; DB cleaned to 3 baseline courses. Applied post-review tweak: demo course only appears under the ALL accuracy filter.
+

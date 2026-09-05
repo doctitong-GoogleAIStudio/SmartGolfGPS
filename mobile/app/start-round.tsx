@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { View, Text, StyleSheet, Pressable, ScrollView, TextInput } from "react-native";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -7,8 +7,10 @@ import { api, cachedGet, getActiveRound, setActiveRound, ActiveRound } from "@/s
 import { storage } from "@/src/utils/storage";
 import { ScreenHeader, Overline } from "@/src/components/ui";
 import { MapBadge } from "@/src/components/MapBadge";
-import { LayoutAccuracy } from "@/src/components/LayoutAccuracy";
+import { LayoutAccuracy, accuracyLevel } from "@/src/components/LayoutAccuracy";
 import { toast } from "@/src/lib/toast";
+
+const ACC_FILTERS = ["all", "HIGH", "MEDIUM", "LOW"] as const;
 
 export default function StartRound() {
   const router = useRouter();
@@ -18,11 +20,21 @@ export default function StartRound() {
   const [holeCount, setHoleCount] = useState(18);
   const [player, setPlayer] = useState("Golfer");
   const [existing, setExisting] = useState<ActiveRound>(null);
+  const [accFilter, setAccFilter] = useState<(typeof ACC_FILTERS)[number]>("all");
 
   useEffect(() => {
     cachedGet<any[]>("/courses", "courses").then((cs) => { setCourses(cs); if (cs[0]) setCourseId(cs[0].id); }).catch(() => {});
     getActiveRound().then(setExisting);
   }, []);
+
+  const visibleCourses = useMemo(
+    () => courses.filter((c) => accFilter === "all" || (!c.isDemo && accuracyLevel(c)?.label === accFilter)),
+    [courses, accFilter],
+  );
+
+  useEffect(() => {
+    if (visibleCourses.length && !visibleCourses.some((c) => c.id === courseId)) setCourseId(visibleCourses[0].id);
+  }, [visibleCourses]);
 
   const start = async () => {
     if (!courseId) { toast.error("Select a course"); return; }
@@ -54,8 +66,21 @@ export default function StartRound() {
 
         <View>
           <Overline style={{ marginBottom: 8 }}>GOLF COURSE</Overline>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.accRow} testID="start-acc-filter-row">
+            {ACC_FILTERS.map((f) => {
+              const on = accFilter === f;
+              return (
+                <Pressable key={f} testID={`start-acc-filter-${f.toLowerCase()}`} onPress={() => setAccFilter(f)} style={[styles.accChip, on && styles.accChipOn]}>
+                  <Text style={[styles.accChipTxt, on && styles.accChipTxtOn]}>{f === "all" ? "ALL" : `${f} ACCURACY`}</Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
           <View style={{ gap: 8 }}>
-            {courses.map((c) => (
+            {visibleCourses.length === 0 && (
+              <Text style={styles.accEmpty} testID="start-acc-empty">No {accFilter.toLowerCase()}-accuracy courses yet. Map a course in the editor or confirm its location to raise its trust level.</Text>
+            )}
+            {visibleCourses.map((c) => (
               <Pressable key={c.id} testID={`start-course-${c.id}`} onPress={() => setCourseId(c.id)} style={[styles.courseCard, courseId === c.id && styles.courseCardActive]}>
                 <Text style={styles.courseName}>{c.name}</Text>
                 <Text style={styles.courseMeta}>{c.location} · {c.holeCount} holes {c.isDemo ? "· DEMO DATA" : ""}</Text>
@@ -98,6 +123,12 @@ const styles = StyleSheet.create({
   discardBtn: { height: 48, paddingHorizontal: 16, borderRadius: 12, backgroundColor: colors.zinc100, alignItems: "center", justifyContent: "center" },
   discardTxt: { fontWeight: "700", fontSize: 12, color: colors.charcoal },
   courseCard: { padding: 16, borderRadius: 18, borderWidth: 1, borderColor: colors.zinc200, backgroundColor: "#fff" },
+  accRow: { gap: 8, paddingBottom: 10, paddingRight: 8 },
+  accChip: { flexShrink: 0, height: 34, paddingHorizontal: 14, borderRadius: 999, backgroundColor: colors.zinc100, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.zinc200 },
+  accChipOn: { backgroundColor: colors.charcoal, borderColor: colors.charcoal },
+  accChipTxt: { fontSize: 11, fontWeight: "900", letterSpacing: 0.5, color: colors.zinc500 },
+  accChipTxtOn: { color: "#fff" },
+  accEmpty: { fontSize: 13, fontWeight: "600", color: colors.zinc500, lineHeight: 19, paddingVertical: 12 },
   courseCardActive: { borderColor: colors.green, backgroundColor: "rgba(20,83,45,0.05)" },
   courseName: { fontWeight: "800", fontSize: 14, color: colors.charcoal },
   courseMeta: { fontSize: 10, color: colors.zinc400, fontWeight: "700", marginTop: 2 },

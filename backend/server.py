@@ -86,6 +86,29 @@ async def _nominatim_get(q: str):
     return None
 
 
+async def _nominatim_search(q: str, limit: int = 6, viewbox: str | None = None):
+    """Rate-limited Nominatim search → list of {name, lat, lng} (nearest-biased if viewbox)."""
+    global _geo_last
+    async with _geo_lock:
+        wait = 1.1 - (time.monotonic() - _geo_last)
+        if wait > 0:
+            await asyncio.sleep(wait)
+        _geo_last = time.monotonic()
+        headers = {"User-Agent": os.environ.get("NOMINATIM_USER_AGENT", "SmartGolfGPS/1.0"), "Accept": "application/json"}
+        params = {"q": q, "format": "jsonv2", "limit": limit, "accept-language": "en"}
+        if viewbox:
+            params["viewbox"] = viewbox
+        async with httpx.AsyncClient(timeout=httpx.Timeout(6.0), headers=headers) as hc:
+            r = await hc.get(_NOMINATIM_URL, params=params)
+            r.raise_for_status()
+            rows = r.json()
+    out = []
+    for row in (rows if isinstance(rows, list) else []):
+        if row.get("lat") and row.get("lon"):
+            out.append({"name": row.get("display_name", ""), "lat": float(row["lat"]), "lng": float(row["lon"])})
+    return out
+
+
 async def geocode_course(name: str, location: str, force: bool = False):
     """Forward-geocode a course to (lat, lng) via OSM Nominatim. Cached in Mongo
     (positive + negative), rate-limited to <=1 req/sec, and never raises — returns
@@ -398,6 +421,24 @@ async def geocode_all():
     ids = [c["id"] async for c in db.courses.find({"id": {"$ne": "demo-apo-davao"}, "layoutSource": {"$ne": "mapped"}}, {"id": 1})]
     asyncio.create_task(_bulk_geocode(ids))
     return {"courses": len(ids)}
+
+
+@api.get("/geocode/search")
+async def geocode_search(q: str, lat: Optional[float] = None, lng: Optional[float] = None):
+    """Nearby place search for the Confirm-Location screen — pick a pin by name."""
+    q = (q or "").strip()
+    if len(q) < 2:
+        return {"results": []}
+    viewbox = None
+    if lat is not None and lng is not None:
+        d = 0.4
+        viewbox = f"{lng - d},{lat + d},{lng + d},{lat - d}"
+    try:
+        results = await _nominatim_search(q, limit=6, viewbox=viewbox)
+    except Exception as exc:
+        logger.warning("Nominatim search failed for %r: %s", q, exc)
+        results = []
+    return {"results": results}
 
 
 async def _bulk_geocode(ids):
