@@ -1,0 +1,39 @@
+{
+  "summary": "Iteration 17 — validated the two new enhancements (Trust Reminder on LOW start and Drop-On-Long-Press wiring) plus regressions on both surfaces. Backend 5/5 pytest (/app/backend/tests/test_iter17_trust_reminder.py): POST /api/courses with a gibberish name/location ('ZZ Test Range QA Iter17' / 'Nowhereville_QQXX') returns geocoded=false + layoutSource='simulated' + 18 holes with tees → LOW; POST /api/rounds still creates a round with 18 HoleScore entries; GET /api/geocode/search returns {results:[...]} on valid q and {results:[]} on q<2 chars; baseline non-demo courses still reflect geocoded=true (MEDIUM). Mobile UI (390x844, Expo web preview): (1) TRUST REMINDER — created a LOW course via API, refreshed /start-round, LOW filter chip shows the LOW course card (start-course-{id}) with LayoutAccuracy badge reading 'LOW ACCURACY', and CORRECTLY excludes the demo course (LOW filter uses !c.isDemo). Selected the LOW course + tapped START ROUND → low-accuracy-reminder modal appeared with both low-reminder-confirm-btn and low-reminder-start-anyway-btn. CONFIRM LOCATION navigated to /courses/{id}/locate (locate-course-screen mounted). START ANYWAY navigated to /course-overview and created the round (verified via GET /api/rounds). MEDIUM and DEMO courses did NOT show the modal — both went straight to /course-overview. (2) LONG-PRESS DROP — GolfMap.tsx:27,107,200 defines onMapLongPress prop and forwards MapLibre onLongPress event to it with {lat: e.nativeEvent.lngLat[1], lng: e.nativeEvent.lngLat[0]}; locate.tsx:74 wires onMapLongPress={(p)=>{setPin(p); setRecenterKey(k=>k+1)}}, and the sub-title copy now reads 'Long-press or tap the map, drag the pin, or search below'. Verified via code review only — the web preview uses GolfMap.web.tsx stub so the gesture can't fire in Playwright, but the locate screen renders + Search + USE THIS LOCATION continue to work without regression. (3) REGRESSION — start-acc-filter-{all,high,medium,low} chips all clickable and filter correctly; MapBadge + LayoutAccuracy render on non-demo cards; locate-search-input + locate-search-btn returned 6 results for 'Manila Golf' and tapping locate-result-0 updated locate-coords to 14.59120,120.97945; locate-save-btn (USE THIS LOCATION) still calls /relocate and navigates to /course-overview. Cleanup: deleted the round + LOW course; DB back to 3 baseline courses (demo-apo-davao + Southpacific 5dcfcc4a… + Manila Golf dc2f1c3c…).",
+  "platforms_tested": ["mobile"],
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "web": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+    "mobile": {
+      "ui_bugs": [],
+      "integration_issues": [],
+      "design_issues": [],
+      "react_native_issues": []
+    }
+  },
+  "parity_issues": [],
+  "test_report_links": [
+    "/app/backend/tests/test_iter17_trust_reminder.py",
+    "/app/test_reports/pytest/iter17_trust_reminder.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "start-round.tsx:32-35 visibleCourses — filter now uses `!c.isDemo && accuracyLevel(c)?.label === accFilter`, so demo Apo is correctly excluded from HIGH/MEDIUM/LOW buckets (only visible under ALL). This addresses the note in iteration_16 review. Confirmed via UI: LOW filter shows only the ZZ Test course, no demo.",
+    "start-round.tsx:49-55 start() — LOW gate `if (a && a.level === 1) { setLowReminder(true); return; }` correctly only triggers for non-demo (line 52 sets `a = null` for demo) and only for a.level === 1 (LOW). MEDIUM (level 2) and HIGH (level 3) skip the modal. Verified.",
+    "start-round.tsx:132-138 modal handlers — CONFIRM LOCATION uses router.push (keeps back-stack, so user can return to start-round); START ANYWAY calls beginRound() which uses router.replace('/course-overview'). Both sensible. Minor: the trust modal doesn't dismiss on backdrop tap (onRequestClose only handles Android hardware back). If you want tap-outside-to-dismiss on web/iOS, wrap the backdrop in a Pressable — optional, not a blocker.",
+    "GolfMap.tsx:27,107,200 onMapLongPress — correctly typed on Props, destructured in the function signature, and forwarded from MapLibre's onLongPress with the same lngLat[1]/lngLat[0] normalisation as onPress. Symmetric with onMapPress. Clean.",
+    "courses/[id]/locate.tsx:74 onMapLongPress={(p)=>{setPin(p); setRecenterKey(k=>k+1)}} — bumping recenterKey re-eases the camera to the new pin so the map recenters on the drop, matching the search-pick UX. Good parity with pick().",
+    "courses/[id]/locate.tsx:83 sub-copy — 'Long-press or tap the map, drag the pin, or search below' surfaces the new gesture without cluttering. Nice.",
+    "GolfMap.web.tsx is a stub so long-press cannot be exercised on the Expo web preview — this is a known constraint documented in agent_to_agent_context. On a native build the MapLibre onLongPress fires as expected. No web fallback added — probably not needed since users on web preview aren't the target."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter17_trust_reminder.py"
+  ],
+  "success_rate": {"backend": "100% (5/5)", "frontend": "100% (all 8 checkpoints: LOW filter, LOW badge, demo excluded, modal appears LOW, CONFIRM navigates, START ANYWAY creates round, MEDIUM skips modal, DEMO skips modal)"},
+  "test_credentials": "N/A — no auth in this app",
+  "seed_data_creation": "Created 1 LOW course ('ZZ Test Range QA Iter17', id 9a48ccd9-…) via API for UI test; created 2 rounds during flow (one via START ANYWAY, one via MEDIUM); ALL deleted post-test. Backend pytest created + deleted 1 course ('TEST_Iter17_ZZ_Range_QA') and 1 round. DB is back to the 3 baseline courses.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "All iter-17 acceptance criteria PASS. Backend regression: pytest /app/backend/tests/test_iter17_trust_reminder.py -o addopts='' (5/5). To reproduce Trust Reminder UI: POST /api/courses with gibberish location → refresh /start-round → LOW filter → select the course → START ROUND → modal appears with confirm-btn (→/courses/{id}/locate) and start-anyway-btn (→/course-overview). Long-press cannot be exercised on the .web.tsx stub — verified only by code review. GolfMap.tsx:200 forwards MapLibre onLongPress → onMapLongPress; locate.tsx:74 wires the handler. No blocking issues.",
+  "rca of the issue": ""
+}

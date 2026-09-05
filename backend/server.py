@@ -277,7 +277,8 @@ class Shot(BaseModel):
 # ---------- Courses ----------
 @api.get("/courses")
 async def list_courses():
-    return await db.courses.find({}, {"_id": 0}).to_list(200)
+    courses = await db.courses.find({}, {"_id": 0}).to_list(200)
+    return [await _ensure_layout(c) for c in courses]
 
 
 @api.post("/courses")
@@ -317,7 +318,7 @@ async def get_course(course_id: str):
     c = await db.courses.find_one({"id": course_id}, {"_id": 0})
     if not c:
         raise HTTPException(404, "Course not found")
-    return c
+    return await _ensure_layout(c)
 
 
 @api.put("/courses/{course_id}")
@@ -401,6 +402,21 @@ def _apply_layout(c: dict, lat: float, lng: float, geocoded: bool) -> dict:
         "clubhouse": pois["clubhouse"].model_dump(), "drivingRange": pois["drivingRange"].model_dump(),
         "practiceGreen": pois["practiceGreen"].model_dump(), "parking": pois["parking"].model_dump(),
     }
+
+
+async def _ensure_layout(c: dict) -> dict:
+    """Self-heal on access: any non-mapped course missing tee coords gets a simulated layout."""
+    if not c or c.get("layoutSource") == "mapped":
+        return c
+    holes = c.get("holes") or []
+    if any(h.get("tee") for h in holes):
+        return c
+    lat, lng = c.get("latitude"), c.get("longitude")
+    if lat is None or lng is None:
+        return c
+    upd = _apply_layout(c, lat, lng, bool(c.get("geocoded")))
+    await db.courses.update_one({"id": c["id"]}, {"$set": upd})
+    return {**c, **upd}
 
 
 @api.post("/courses/{course_id}/relocate")

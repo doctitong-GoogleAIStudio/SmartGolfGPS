@@ -24,6 +24,7 @@ type Props = {
   zoom?: number;
   mapType?: "satellite" | "hybrid" | "map";
   onMapPress?: (p: LatLng) => void;
+  onMapLongPress?: (p: LatLng) => void;
   onUserPan?: () => void;
   ball?: LatLng | null;
   gpsPos?: LatLng | null;
@@ -103,6 +104,7 @@ export function GolfMap({
   zoom = 17,
   mapType = "satellite",
   onMapPress,
+  onMapLongPress,
   onUserPan,
   ball,
   gpsPos,
@@ -195,6 +197,7 @@ export function GolfMap({
       logo={false}
       attribution={false}
       onPress={(e: any) => onMapPress && onMapPress({ lat: e.nativeEvent.lngLat[1], lng: e.nativeEvent.lngLat[0] })}
+      onLongPress={(e: any) => onMapLongPress && onMapLongPress({ lat: e.nativeEvent.lngLat[1], lng: e.nativeEvent.lngLat[0] })}
       onRegionWillChange={(e: any) => e.nativeEvent?.userInteraction && onUserPan && onUserPan()}
       testID="golf-map"
     >

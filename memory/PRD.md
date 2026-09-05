@@ -192,3 +192,8 @@ iteration_3 (mobile enhancements): 4/4 PASS (GCash QR, Weather On Card, Voice Ca
 - Nearby Search (locate.tsx + backend GET /api/geocode/search?q=&lat=&lng=): search a place by name (biased near current pin via viewbox), tap a result to drop the pin (GolfMap recenterKey bumps camera). Backend _nominatim_search() helper; returns {results:[{name,lat,lng}]}, {results:[]} for <2 chars, never 500s.
 - Verified: iteration_16.json — backend 10/10 pytest (/app/backend/tests/test_iter16_search_and_regressions.py), mobile all flows verified on Expo web preview; DB cleaned to 3 baseline courses. Applied post-review tweak: demo course only appears under the ALL accuracy filter.
 
+
+### Feature parity for ALL courses + self-heal safeguard (2026-06)
+- Verified every hole-level feature applies to all imported/selected courses, not just the demo: no demo-only gating exists in the mobile app (all isDemo checks are cosmetic badges), and all courses (demo + both imported) carry 18 tees, full F/C/B greens, hazards on every hole, and all 4 POIs. Every create path supplies coordinates (ph-courses import sends the directory lat/lng; manual create defaults to device/Davao), so create_course always generates the full layout; startup backfill covers pre-existing courses.
+- Added _ensure_layout(c) self-heal (backend): GET /courses and GET /courses/{id} now regenerate + persist a simulated layout for any non-mapped course found missing tee coords (with lat/lng). Guarantees Course Overview, hole navigation, distance arcs, green detail, hazard panel, auto-advance, GPS modes, etc. work on ANY course however it was created. Never touches hand-mapped courses. Verified via curl: a deliberately broken tee-less course self-heals to full tees+greens+POIs on GET.
+

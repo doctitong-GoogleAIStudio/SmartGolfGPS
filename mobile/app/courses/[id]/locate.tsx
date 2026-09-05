@@ -71,7 +71,7 @@ export default function LocateCourse() {
 
   return (
     <View style={styles.screen} testID="locate-course-screen">
-      <GolfMap center={pin} recenterKey={recenterKey} zoom={16} mapType="hybrid" target={pin} onTargetDrag={setPin} onMapPress={setPin} />
+      <GolfMap center={pin} recenterKey={recenterKey} zoom={16} mapType="hybrid" target={pin} onTargetDrag={setPin} onMapPress={setPin} onMapLongPress={(p) => { setPin(p); setRecenterKey((k) => k + 1); }} />
 
       <View style={[styles.top, { top: insets.top + 8 }]} pointerEvents="box-none">
         <View style={styles.topRow}>
@@ -80,7 +80,7 @@ export default function LocateCourse() {
           </Pressable>
           <View style={styles.titleCard}>
             <Text style={styles.title} numberOfLines={1}>{course.name}</Text>
-            <Text style={styles.sub}>Drag the pin, tap the map, or search below</Text>
+            <Text style={styles.sub}>Long-press or tap the map, drag the pin, or search below</Text>
           </View>
         </View>
 
