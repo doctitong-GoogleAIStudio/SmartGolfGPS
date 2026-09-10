@@ -1,0 +1,26 @@
+{
+  "summary": "Regression smoke test after mobile yarn.lock regeneration. All three requested routes (/play, /courses, /start-round) load cleanly on the Expo web preview with expected content rendered and no red screen or page errors. Metro bundles 1384 modules with 0 errors. Only pre-existing benign React Native Web deprecation warnings (shadow*/textShadow*/pointerEvents) observed — unrelated to the dependency reinstall.",
+  "platforms_tested": ["mobile"],
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "mobile": {
+      "ui_bugs": [],
+      "integration_issues": [],
+      "design_issues": [],
+      "react_native_issues": [
+        {"component": "RN Web deprecations", "issue": "Non-blocking warnings: 'shadow*' style props deprecated (use boxShadow), 'textShadow*' deprecated (use textShadow), props.pointerEvents deprecated (use style.pointerEvents). Pre-existing, not caused by lockfile change."}
+      ]
+    }
+  },
+  "parity_issues": [],
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A", "frontend": "100%"},
+  "seed_data_creation": "",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 20 was a lockfile-regression smoke test only. /play shows HOLE/PAR/HCP header + distance card (383 YD center) + MAP/SCORE/CADDIE/BAG/MORE bottom nav. /courses shows course list + RE-GEOCODE ALL COURSES button + badges. /start-round shows course list + ALL/HIGH ACCURACY/MEDIUM ACCURACY filter chips + START ROUND button. No regressions from yarn.lock regeneration.",
+  "rca of the issue": ""
+}
