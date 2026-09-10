@@ -41,7 +41,7 @@ export default function Rangefinder() {
   const [target, setTarget] = useState<LatLng | null>(null);
   const [targetLabel, setTargetLabel] = useState("PIN");
   const [setBallMode, setSetBallMode] = useState(false);
-  const [mapType, setMapType] = useState<"satellite" | "hybrid" | "map">("satellite");
+  const [mapType, setMapType] = useState<"satellite" | "hybrid" | "map" | "golf" | "terrain">("golf");
   const [elev, setElev] = useState<any>(null);
   const [wind, setWind] = useState<{ speed: number; dir: string }>({ speed: 0, dir: "none" });
   const [autoWx, setAutoWx] = useState(false);
@@ -68,6 +68,7 @@ export default function Rangefinder() {
   const [pendingGreen, setPendingGreen] = useState(false);
   const [greenFocus, setGreenFocus] = useState<{ key: number; point: LatLng } | null>(null);
   const [advancePrompt, setAdvancePrompt] = useState<{ nextIdx: number; holeNumber: number } | null>(null);
+  const [holeUpKey, setHoleUpKey] = useState(0);
 
   const nearGreenRef = useRef(false);
   const puttDismissedRef = useRef<Set<number>>(new Set());
@@ -440,6 +441,15 @@ export default function Rangefinder() {
     });
   };
 
+  const cycleMapType = () => {
+    setMapType((m) => {
+      const next = m === "golf" ? "satellite" : m === "satellite" ? "terrain" : "golf";
+      toast.info(next === "golf" ? "Golf View" : next === "satellite" ? "Satellite View" : "Terrain View");
+      if (next === "golf") setHoleUpKey((k) => k + 1);
+      return next;
+    });
+  };
+
   const startShot = (club: string) => {
     if (!ball) { toast.error("No ball position yet"); return; }
     setShot({ start: ball, club, targetDist: distM, playsLike: pl?.playsLikeMeters });
@@ -518,6 +528,9 @@ export default function Rangefinder() {
         focusTarget={greenFocus?.point}
         flyover={hole?.tee && hole?.greenCenter ? { from: hole.tee, to: hole.greenCenter } : null}
         flyoverKey={flyoverKey}
+        golfView={mapType === "golf"}
+        holeUp={hole?.tee && hole?.greenCenter ? { from: hole.tee, to: hole.greenCenter } : null}
+        holeUpKey={holeUpKey}
       />
 
       {(() => {
@@ -703,8 +716,12 @@ export default function Rangefinder() {
 
       {/* Right controls */}
       <View style={[styles.rightCtrls, { top: insets.top + 60 }]}>
-        <Pressable testID="map-type-btn" onPress={() => setMapType((m) => (m === "satellite" ? "hybrid" : m === "hybrid" ? "map" : "satellite"))} style={styles.iconBtn}>
-          <Ionicons name="layers" size={20} color={colors.charcoal} />
+        <Pressable testID="map-type-btn" onPress={cycleMapType} style={styles.mapTypeBtn}>
+          <Ionicons name={mapType === "golf" ? "golf" : mapType === "terrain" ? "trail-sign" : "layers"} size={17} color={colors.charcoal} />
+          <Text style={styles.mapTypeTxt}>{mapType === "golf" ? "GOLF" : mapType === "satellite" ? "SAT" : mapType === "hybrid" ? "HYB" : mapType === "terrain" ? "TERR" : "MAP"}</Text>
+        </Pressable>
+        <Pressable testID="hole-up-btn" onPress={() => { setHoleUpKey((k) => k + 1); toast.info("Fairway up", "Tee at the bottom, green at the top."); }} style={styles.iconBtn}>
+          <Ionicons name="arrow-up-circle-outline" size={22} color={colors.charcoal} />
         </Pressable>
         <Pressable testID="dist-arcs-btn" onPress={() => setArcsOn((v) => !v)} style={[styles.iconBtn, arcsOn && { backgroundColor: colors.charcoal }]}>
           <Ionicons name="radio-outline" size={20} color={arcsOn ? colors.gold : colors.charcoal} />
@@ -971,6 +988,8 @@ const styles = StyleSheet.create({
   walkTxt: { fontSize: 10, fontWeight: "900", color: colors.zinc600 },
   walkNum: { fontSize: 14, color: colors.green },
   rightCtrls: { position: "absolute", right: 12, gap: 8, zIndex: 15 },
+  mapTypeBtn: { height: 48, width: 48, borderRadius: 14, backgroundColor: "#fff", alignItems: "center", justifyContent: "center", gap: 1, borderWidth: 1, borderColor: colors.zinc300, shadowColor: "#000", shadowOpacity: 0.2, shadowRadius: 6, elevation: 4 },
+  mapTypeTxt: { fontSize: 7, fontWeight: "900", letterSpacing: 0.5, color: colors.zinc500, marginTop: 1 },
   gpsErrCard: { position: "absolute", top: "33%", left: 24, right: 24, backgroundColor: "#fff", borderRadius: 18, padding: 20, zIndex: 30, shadowColor: "#000", shadowOpacity: 0.25, shadowRadius: 10, elevation: 8 },
   gpsErrTitle: { fontWeight: "800", fontSize: 14, color: colors.charcoal, textAlign: "center" },
   gpsErrBtn: { flex: 1, height: 48, borderRadius: 14, alignItems: "center", justifyContent: "center" },

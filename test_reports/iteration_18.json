@@ -1,0 +1,35 @@
+{
+  "summary": "Mobile-only frontend testing of the Hole19-style Play screen upgrade (Golf View + map-type cycle + hole-up). All testIDs mount, /play loads with mapType defaulting to 'golf', map-type-btn cycles GOLF → SAT → TERR → GOLF with matching labels, hole-up-btn shows the 'Fairway up · Tee at the bottom, green at the top.' toast, and every regression control (rf-prev/next-hole-btn, dist-arcs-btn, hazard-panel-btn, recenter-btn, cam-mode-btn, voice-caddie-btn) taps without error. 0 console errors during the full flow. Code review of GolfMap.tsx confirms buildStyle('golf') emits only a background layer (no raster), buildStyle('terrain') uses OSM, golfView renders a fairway-corridor line (tee→greenCenter) + green-pad polygon, and holeUp/holeUpKey effect eases to bearingDeg(from,to)/midpoint/distance-based zoom. play.tsx correctly wires golfView, holeUp, holeUpKey and bumps holeUpKey on cycleMapType → golf.",
+  "platforms_tested": ["mobile"],
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "mobile": {
+      "ui_bugs": [],
+      "integration_issues": [],
+      "design_issues": [
+        {"screen": "Play / rightCtrls map-type-btn", "issues": ["Button is a fixed 44x44 square but shows both an Ionicon and a stacked label (GOLF/SAT/TERR/HYB/MAP). Layout works but the label sits tight under the icon with no bottom padding; consider a slightly taller pill or smaller icon so long labels (e.g. TERR) breathe."]}
+      ],
+      "react_native_issues": []
+    }
+  },
+  "parity_issues": [],
+  "test_report_links": [],
+  "action_items": [
+    "(Nit only) Consider a taller map-type-btn or reduced icon size so 'TERR'/'GOLF' text has consistent vertical padding.",
+    "Pre-existing TS warning at play.tsx ~line 427 for the nearest-hole 'best' narrowing is unrelated and does not affect bundling — main agent already noted."
+  ],
+  "critical_code_review_comments": [
+    "GolfMap.tsx buildStyle('golf') correctly returns { sources:{}, layers:[background#2f7d47] } — clean, satellite-free canvas as spec'd.",
+    "golfView branch renders a fairway-corridor LineString (tee → greenCenter, width 22, opacity 0.55) plus a green pad polygon sized from greenFront↔greenBack halved (min 12m) — matches PRD.",
+    "holeUp effect: bearing=bearingDeg(from,to), center=midpoint, zoom tiered by distance (15.1 / 15.7 / 16.3 / 16.9), easeTo 750ms — correct hole-up framing behavior.",
+    "play.tsx cycleMapType goes golf → satellite → terrain → golf, emits per-mode toast, and bumps holeUpKey when re-entering golf so the camera reframes — as required.",
+    "Default mapType state is 'golf' (line 44) — Golf View is the default on load, matches PRD.",
+    "hole-up-btn handler bumps holeUpKey and toasts 'Fairway up / Tee at the bottom, green at the top.' — verified live on preview."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (not requested)", "frontend": "100% (16/16 testIDs present, all controls tapped without crash, 0 console errors, correct label sequence GOLF→SAT→TERR→GOLF)"},
+  "seed_data_creation": "None — used existing active/last course on the preview.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "GolfMap.web.tsx is a stub so on the Expo web preview the map area shows a placeholder 'Satellite map / Live map renders on the mobile app' regardless of mapType — this is expected and only the control logic + labels + toasts + no-crash can be verified there. GolfMap.tsx (native) code paths for golfView polygons/lines and holeUp camera easing were verified by code review only. All controls exist at /play and behave; no code changes were required this iteration."
+}

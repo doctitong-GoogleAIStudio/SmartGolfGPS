@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { View, Text, StyleSheet, PanResponder } from "react-native";
 import { Map, Camera, Marker, GeoJSONSource, Layer, type CameraRef, type MapRef } from "@maplibre/maplibre-react-native";
 import { colors, font } from "@/src/theme";
-import { LatLng, bearingDeg } from "@/src/lib/geo";
+import { LatLng, bearingDeg, haversineMeters } from "@/src/lib/geo";
 
 const ESRI_SAT =
   "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
@@ -22,7 +22,10 @@ type ShotLine = { start: LatLng; end: LatLng; label?: string };
 type Props = {
   center: LatLng;
   zoom?: number;
-  mapType?: "satellite" | "hybrid" | "map";
+  mapType?: "satellite" | "hybrid" | "map" | "golf" | "terrain";
+  golfView?: boolean;
+  holeUp?: { from: LatLng; to: LatLng } | null;
+  holeUpKey?: number;
   onMapPress?: (p: LatLng) => void;
   onMapLongPress?: (p: LatLng) => void;
   onUserPan?: () => void;
@@ -67,10 +70,13 @@ const HAZARD_COLORS: Record<string, string> = {
   "OUT OF BOUNDS": colors.red,
 };
 
-function buildStyle(mapType: "satellite" | "hybrid" | "map") {
+function buildStyle(mapType: string) {
   const sources: any = {};
   const layers: any[] = [];
-  if (mapType === "map") {
+  if (mapType === "golf") {
+    // Clean, satellite-free "Golf View" — a fairway-green canvas the hole draws on.
+    layers.push({ id: "golf-bg", type: "background", paint: { "background-color": "#2f7d47" } });
+  } else if (mapType === "map" || mapType === "terrain") {
     sources.osm = { type: "raster", tiles: [OSM], tileSize: 256, maxzoom: 19 };
     layers.push({ id: "osm", type: "raster", source: "osm" });
   } else {
@@ -129,6 +135,9 @@ export function GolfMap({
   polygons = [],
   flyover = null,
   flyoverKey = 0,
+  golfView = false,
+  holeUp = null,
+  holeUpKey = 0,
   style,
 }: Props) {
   const cameraRef = useRef<CameraRef>(null);
@@ -168,6 +177,18 @@ export function GolfMap({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusKey]);
 
+  // Hole-up orientation: frame the hole with the direction of play pointing up
+  // (tee at bottom, green at top) — the Hole19-style rotating fairway view.
+  useEffect(() => {
+    if (!holeUpKey || !holeUp) return;
+    const b = bearingDeg(holeUp.from, holeUp.to);
+    const mid = { lat: (holeUp.from.lat + holeUp.to.lat) / 2, lng: (holeUp.from.lng + holeUp.to.lng) / 2 };
+    const dM = (haversineMeters(holeUp.from, holeUp.to) as number) || 300;
+    const z = dM > 460 ? 15.1 : dM > 320 ? 15.7 : dM > 200 ? 16.3 : 16.9;
+    cameraRef.current?.easeTo({ center: [mid.lng, mid.lat], bearing: b, zoom: z, duration: 750 });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [holeUpKey]);
+
   const shotFeatures: GeoJSON.FeatureCollection = {
     type: "FeatureCollection",
     features: shotLines.map((s) => line([s.start, s.end])),
@@ -202,6 +223,19 @@ export function GolfMap({
       testID="golf-map"
     >
       <Camera ref={cameraRef} initialViewState={{ center: [center.lng, center.lat], zoom }} />
+
+      {/* Golf View schematic: fairway corridor tee→green + a clear green pad */}
+      {golfView && tee && greens?.greenCenter && (
+        <GeoJSONSource id="fairway-corridor" data={line([tee, greens.greenCenter])}>
+          <Layer id="fairway-corridor-line" type="line" source="fairway-corridor" layout={{ "line-cap": "round", "line-join": "round" }} paint={{ "line-color": "#5aa86a", "line-width": 22, "line-opacity": 0.55 }} />
+        </GeoJSONSource>
+      )}
+      {golfView && greens?.greenCenter && (
+        <GeoJSONSource id="green-pad" data={{ type: "Feature", properties: {}, geometry: { type: "Polygon", coordinates: [ringCoords(greens.greenCenter, greens.greenFront && greens.greenBack ? Math.max(12, (haversineMeters(greens.greenFront, greens.greenBack) as number) / 2) : 15)] } }}>
+          <Layer id="green-pad-fill" type="fill" source="green-pad" paint={{ "fill-color": "#bff0a8", "fill-opacity": 0.9 }} />
+          <Layer id="green-pad-line" type="line" source="green-pad" paint={{ "line-color": "#8fd97a", "line-width": 1.5 }} />
+        </GeoJSONSource>
+      )}
 
       {polygons.filter((p) => p.type !== "CART_PATH" && p.points.length >= 3).length > 0 && (
         <GeoJSONSource id="hole-polys" data={{ type: "FeatureCollection", features: polygons.filter((p) => p.type !== "CART_PATH" && p.points.length >= 3).map((p) => ({ type: "Feature", properties: { color: POLY_COLORS[p.type] || "#9ca3af" }, geometry: { type: "Polygon", coordinates: [[...p.points.map((pt) => [pt.lng, pt.lat]), [p.points[0].lng, p.points[0].lat]]] } })) }}>
