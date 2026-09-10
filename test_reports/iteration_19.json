@@ -1,0 +1,35 @@
+{
+  "summary": "Mobile-only frontend testing of the three Hole19-style Play-screen additions: Auto-Rotate, Dogleg/Layup markers, and Green Zoom. All three verified on the Expo web preview against /app/mobile/app/(tabs)/play.tsx and /app/mobile/src/components/GolfMap.tsx. Green Zoom: tapping [data-testid=green-zoom-btn] flips the distance card from 'CENTER · ACTUAL' to 'PIN · ACTUAL' (383 yd) and surfaces a 'Green zoom / Drag the flag to set today's pin.' toast — target flag remains draggable (onTargetDrag → savePin path intact). Auto-Rotate (code review + no-crash): rf-next-hole-btn / rf-prev-hole-btn cycle the hole label HOLE 1 → HOLE 2 → HOLE 1 without error; the hole-change effect at play.tsx:151-153 bumps holeUpKey when mapType==='golf' (else flyoverKey), and cycleMapType (l.449) also bumps holeUpKey when re-entering golf — the underlying holeUp camera easing was verified by code review in iteration_18 (GolfMap.web.tsx is a stub so camera can't be seen on preview). Layup markers (code review + no-crash): play.tsx:506-521 useMemo computes layups only when mapType==='golf' from tee→greenCenter at 100/150/200 yd (or 90/140/180 m by unit) and skips marks longer than holeLenM - 30 m; passes to GolfMap which renders styles.layMk pill markers (GolfMap.tsx:307-311). Toggling GOLF→SAT→TERR→GOLF empties layups on non-golf views without crash. Regression: map-type-btn cycle GOLF→SAT→TERR→GOLF labels correct, hole-up-btn, dist-arcs-btn, hazard-panel-btn, recenter-btn, cam-mode-btn, voice-caddie-btn all tap without error; fcb-strip + smart-caddie-strip still mount; 0 console errors during the full flow.",
+  "platforms_tested": ["mobile"],
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "mobile": {
+      "ui_bugs": [],
+      "integration_issues": [],
+      "design_issues": [],
+      "react_native_issues": []
+    }
+  },
+  "parity_issues": [],
+  "test_report_links": [],
+  "action_items": [
+    "(Nit / minor race) The default-target useEffect at play.tsx:141-155 depends on [holeIdx, course, pendingGreen] but the async course fetch means the effect can re-run and overwrite targetLabel to 'CENTER' shortly after mount. In this run I saw targetLabel briefly 'PIN' (initial state), then flipped to 'CENTER' once the course settled (~2-3 s later). A user tapping green-zoom-btn immediately on load would see PIN → CENTER → back-to-PIN-only-if-they-tap-again. Consider gating the effect on a 'hasLoaded' flag or moving the label reset behind a course-id change guard. Non-blocking — after settle, green-zoom works exactly as spec'd.",
+    "Pre-existing TS warning at play.tsx ~line 431 (nearest-hole 'best' inference) is unrelated and does not affect bundling — carried over from iteration_18."
+  ],
+  "critical_code_review_comments": [
+    "Green Zoom: play.tsx:523-530 greenZoom() picks pinsRef.current[holeNumber] || hole.greenCenter, sets target + targetLabel='PIN' + greenFocus={key: Date.now(), point}, and shows the 'Green zoom' toast — matches PRD. greenFocus is forwarded to GolfMap as focusKey/focusTarget which triggers camera focus on native.",
+    "Draggable pin: play.tsx:542 onTargetDrag → savePin(p) when targetLabel==='PIN' (else falls back to CUSTOM). After green-zoom the flag stays labelled PIN so drags persist to pinsRef and storage 'sg_pins_<courseId>' — correct.",
+    "Auto-Rotate: play.tsx:151-153 hole-change effect correctly bumps holeUpKey when mapType==='golf' else flyoverKey; both keys drive different camera behaviors in GolfMap. cycleMapType (l.445-452) also bumps holeUpKey when re-entering GOLF so the fairway auto-orients on toggle.",
+    "Layups: play.tsx:506-521 useMemo scope is [mapType, hole, unit]; returns [] for non-golf mapTypes so no pills render on satellite/terrain. Marks are placed by parametric interpolation from tee toward greenCenter at f=(holeLenM-dM)/holeLenM which is geometrically correct only if the fairway is a straight tee→green line — real doglegs would place pills across corners. Acceptable for the current data model (no dogleg-pivot in courses.holes[i]).",
+    "Unit conversion: (unit==='m'? v : v/1.09361) correctly converts yd input into meters for distance comparison — matches fmtDist behavior elsewhere.",
+    "GolfMap.tsx:307-311 layups render as Marker pills using styles.layMk (rgba(255,255,255,0.92) with charcoal border, size ~11px text) — legible on golf-view background, consistent with poiMk styling.",
+    "No blocking-toolbar or overlay issues introduced; green-zoom-btn is between hole-up-btn and dist-arcs-btn in the right rail and is tappable."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (not requested)", "frontend": "100% — green-zoom flips card to 'PIN · ACTUAL' + toast + no crash; hole nav updates label; map-type cycle GOLF→SAT→TERR→GOLF correct; 7/7 regression controls tap OK; 0 console errors"},
+  "seed_data_creation": "None — used the existing active/last course on the preview.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "GolfMap.web.tsx is a stub, so on the Expo web preview the map area shows 'Satellite map / Live map renders on the mobile app' regardless of mapType — this is expected; on the web preview you can only verify control logic + card labels + toasts + no-crash. Green Zoom's camera focus (greenFocus) and Auto-Rotate's holeUp easing and Layup pill positions on the actual fairway can only be visually validated on a native build. When testing green-zoom-btn programmatically, wait ~3-4 s after /play mounts for the async course fetch + default-target effect to settle before the click, otherwise you'll see the CENTER→PIN flip race noted in action_items.",
+  "rca of the issue": ""
+}

@@ -204,3 +204,10 @@ iteration_3 (mobile enhancements): 4/4 PASS (GCash QR, Weather On Card, Voice Ca
 - play.tsx: mapType defaults to 'golf'; map-type-btn cycles GOLF→SATELLITE→TERRAIN with a visible label + per-mode toast. Single-current-hole rendering, auto-advance/nearest-hole detection, big F/C/B distances, smart caddie, offline tiles, and bottom nav (MAP/SCORE/CADDIE/BAG/MORE) already existed and are unchanged.
 - Verified: iteration_18.json — mobile control logic/toasts/labels/no-crash + full code review of GolfMap.tsx pass. NOTE: Golf View pixels + camera rotation render only on the native MapLibre build (web preview uses GolfMap.web.tsx stub), so visuals must be confirmed on a device/APK build.
 
+
+### Auto-Rotate + Layup markers + Green Zoom (2026-06)
+- Auto-Rotate (play.tsx hole-change effect): on every hole change, bumps holeUpKey when mapType==='golf' (else flyoverKey) so the fairway auto-orients hole-up hands-free; cycleMapType also bumps holeUpKey when re-entering Golf View.
+- Layup markers (play.tsx `layups` useMemo + GolfMap `layups` prop / styles.layMk): Golf-View-only pills at 100/150/200 yd (or 90/140/180 m) measured TO the green, interpolated along tee→greenCenter, skipping marks longer than the hole; empty on satellite/terrain.
+- Green Zoom (play.tsx greenZoom + green-zoom-btn): one-tap sets target=pin (saved pin or greenCenter), label PIN, triggers greenFocus camera zoom (focusZoom 18.5); the target flag stays draggable (savePin).
+- Verified: iteration_19.json — green-zoom flips card to 'PIN · ACTUAL' + toast, hole cycling/regression clean, code review of auto-rotate + layups pass. Golf-View pixels/camera still require a native device build to view. Non-blocking nit: default-target effect can transiently reset PIN→CENTER during first-mount async course fetch (left as-is).
+

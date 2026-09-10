@@ -52,6 +52,7 @@ type Props = {
   polygons?: { type: string; points: LatLng[] }[];
   flyover?: { from: LatLng; to: LatLng } | null;
   flyoverKey?: number;
+  layups?: { pt: LatLng; label: string }[];
   style?: any;
 };
 
@@ -138,6 +139,7 @@ export function GolfMap({
   golfView = false,
   holeUp = null,
   holeUpKey = 0,
+  layups = [],
   style,
 }: Props) {
   const cameraRef = useRef<CameraRef>(null);
@@ -302,6 +304,12 @@ export function GolfMap({
         </Marker>
       ))}
 
+      {layups.map((l, i) => (
+        <Marker key={`lay-${i}`} lngLat={[l.pt.lng, l.pt.lat]} anchor="center">
+          <View style={styles.layMk}><Text style={styles.layMkTxt}>{l.label}</Text></View>
+        </Marker>
+      ))}
+
       {gpsPos && (
         <Marker lngLat={[gpsPos.lng, gpsPos.lat]} anchor="center">
           <View style={styles.gpsWrap}>
@@ -414,6 +422,8 @@ const styles = StyleSheet.create({
   arcLabelTxt: { color: "#fff", fontSize: 10, fontWeight: "800" },
   poiMk: { backgroundColor: "rgba(17,24,39,0.8)", borderRadius: 8, paddingHorizontal: 7, paddingVertical: 2, borderWidth: 1, borderColor: colors.gold },
   poiMkTxt: { color: colors.gold, fontSize: 9, fontWeight: "900", letterSpacing: 0.3 },
+  layMk: { backgroundColor: "rgba(255,255,255,0.92)", borderRadius: 999, paddingHorizontal: 7, paddingVertical: 2, borderWidth: 1.5, borderColor: colors.charcoal },
+  layMkTxt: { color: colors.charcoal, fontSize: 10, fontWeight: "900" },
   ballMk: { width: 16, height: 16, borderRadius: 8, backgroundColor: "#fff", borderWidth: 3, borderColor: colors.fairway },
   gpsWrap: { width: 44, height: 44, alignItems: "center", justifyContent: "center" },
   gpsArrow: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, alignItems: "center" },

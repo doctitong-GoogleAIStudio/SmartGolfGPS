@@ -149,7 +149,8 @@ export default function Rangefinder() {
       if (pt) { setTarget(pt); setTargetLabel("PIN"); setGreenFocus({ key: Date.now(), point: pt }); }
       setPendingGreen(false);
     } else if (hole.tee && hole.greenCenter) {
-      setFlyoverKey((k) => k + 1);
+      if (mapType === "golf") setHoleUpKey((k) => k + 1);
+      else setFlyoverKey((k) => k + 1);
     }
   }, [holeIdx, course, pendingGreen]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -501,6 +502,33 @@ export default function Rangefinder() {
 
   const gpsLive = ballSource === "gps" && !!gpsPos;
 
+  // Layup markers along the fairway corridor (distances TO the green), Golf View only.
+  const layups = useMemo(() => {
+    if (mapType !== "golf" || !hole?.tee || !hole?.greenCenter) return [];
+    const tee = hole.tee, g = hole.greenCenter;
+    const holeLenM = haversineMeters(tee, g) as number;
+    const marks = unit === "m" ? [90, 140, 180] : [100, 150, 200];
+    const toM = (v: number) => (unit === "m" ? v : v / 1.09361);
+    const out: { pt: LatLng; label: string }[] = [];
+    marks.forEach((v) => {
+      const dM = toM(v);
+      if (holeLenM > dM + 30) {
+        const f = (holeLenM - dM) / holeLenM;
+        out.push({ pt: { lat: tee.lat + f * (g.lat - tee.lat), lng: tee.lng + f * (g.lng - tee.lng) }, label: String(v) });
+      }
+    });
+    return out;
+  }, [mapType, hole, unit]);
+
+  const greenZoom = () => {
+    const p = pinsRef.current[String(hole?.holeNumber)] || hole?.greenCenter;
+    if (!p) { toast.error("No green data for this hole"); return; }
+    setTarget(p);
+    setTargetLabel("PIN");
+    setGreenFocus({ key: Date.now(), point: p });
+    toast.info("Green zoom", "Drag the flag to set today's pin.");
+  };
+
   return (
     <View style={styles.screen} testID="rangefinder-screen">
       <GolfMap
@@ -531,6 +559,7 @@ export default function Rangefinder() {
         golfView={mapType === "golf"}
         holeUp={hole?.tee && hole?.greenCenter ? { from: hole.tee, to: hole.greenCenter } : null}
         holeUpKey={holeUpKey}
+        layups={layups}
       />
 
       {(() => {
@@ -722,6 +751,9 @@ export default function Rangefinder() {
         </Pressable>
         <Pressable testID="hole-up-btn" onPress={() => { setHoleUpKey((k) => k + 1); toast.info("Fairway up", "Tee at the bottom, green at the top."); }} style={styles.iconBtn}>
           <Ionicons name="arrow-up-circle-outline" size={22} color={colors.charcoal} />
+        </Pressable>
+        <Pressable testID="green-zoom-btn" onPress={greenZoom} style={styles.iconBtn}>
+          <Ionicons name="flag" size={20} color={colors.green} />
         </Pressable>
         <Pressable testID="dist-arcs-btn" onPress={() => setArcsOn((v) => !v)} style={[styles.iconBtn, arcsOn && { backgroundColor: colors.charcoal }]}>
           <Ionicons name="radio-outline" size={20} color={arcsOn ? colors.gold : colors.charcoal} />
