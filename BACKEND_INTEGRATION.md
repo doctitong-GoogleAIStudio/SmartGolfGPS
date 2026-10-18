@@ -39,6 +39,8 @@ After deployment, check `/api/health`, verify an unauthenticated `/api/rounds` r
 
 ## Validation
 
+In an isolated Python 3.12 environment, install `backend/requirements-test.txt`, then run `python -m unittest discover -s backend/tests -p test_authenticated_api.py -v` and the corresponding `test_geometry_preservation_unit.py` suite. The tests replace the application database with a fresh in-memory async mock and do not connect to Atlas. In `mobile`, use `yarn test:navigation` and `yarn tsc --noEmit`.
+
 44 mobile production-module tests passed, including 11 connection/session/namespace tests in addition to the 33 GPS/navigation tests. Full mobile TypeScript compilation passed. Sixteen HTTP tests against the real FastAPI ASGI application with an isolated async Mongo mock passed, covering authentication, revocation, account isolation, destructive-route ownership, editor roles, duplicate IDs, invalid path batches, redacted validation errors and one-time bootstrap. Four existing geometry-preservation unit tests also passed: **64 automated tests total**.
 
 The Android connection test APK uses version 1.1.1/code 115 and the existing isolated `.phase1` package. It uses the debug certificate, bundles Hermes and installs alongside the original production app. A native build succeeded; see the delivery README for final artifact verification. No usable Android device or outdoor GPS test was available. Synthetic data is confined to tests and is not seeded into Atlas.
