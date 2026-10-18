@@ -99,3 +99,4 @@ credentials.json
 .pip-cache/
 .integration-tools/
 .integration-install.log
+.integration-last-test.log

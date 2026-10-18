@@ -1,14 +1,17 @@
 """HTTP tests against the real ASGI app with an isolated async Mongo mock."""
 import hashlib
+import os
 import sys
 import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import httpx
 from mongomock_motor import AsyncMongoMockClient
-import server
+with patch.dict(os.environ, {"MONGO_URL": "mongodb://127.0.0.1:27017", "DB_NAME": "isolated_unit_tests"}):
+    import server  # Never import using a real deployment URI from the caller or .env.
 from auth import create_indexes, password_hash, password_matches
 
 
