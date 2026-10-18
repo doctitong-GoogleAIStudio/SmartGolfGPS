@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { colors, font } from "@/src/theme";
 import { useSettings } from "@/src/context/SettingsContext";
-import { API } from "@/src/lib/api";
+import { API, apiHeaders } from "@/src/lib/api";
 import { storage } from "@/src/utils/storage";
 import { Overline } from "@/src/components/ui";
 
@@ -35,11 +35,14 @@ export default function Caddie() {
     setLoading(true);
     setAdvice("");
     try {
+      if (!API) throw new Error("Backend is not configured");
       const res = await fetch(`${API}/caddie`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: await apiHeaders(true),
+        redirect: "error",
         body: JSON.stringify(ctx),
       });
+      if (!res.ok) throw new Error(`Caddie service returned ${res.status}`);
       // RN fetch buffers the SSE stream; parse all data lines once complete.
       const text = await res.text();
       let out = "";

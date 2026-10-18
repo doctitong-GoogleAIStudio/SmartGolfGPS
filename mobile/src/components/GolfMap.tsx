@@ -1,14 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { View, Text, StyleSheet, PanResponder } from "react-native";
 import { Map, Camera, Marker, GeoJSONSource, Layer, type CameraRef, type MapRef } from "@maplibre/maplibre-react-native";
+import { imageryStyle } from "@/src/lib/imagery";
+import { ImageryCredit } from "./ImageryCredit";
+import { validPoint } from "@/src/lib/gpsQuality";
+import { validRing } from "@/src/lib/navigation";
 import { colors, font } from "@/src/theme";
 import { LatLng, bearingDeg, haversineMeters } from "@/src/lib/geo";
-
-const ESRI_SAT =
-  "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
-const ESRI_REF =
-  "https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}";
-const OSM = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
 
 type Hole = {
   tee?: LatLng | null;
@@ -54,6 +52,7 @@ type Props = {
   flyoverKey?: number;
   layups?: { pt: LatLng; label: string }[];
   style?: any;
+  showImageryCredit?: boolean;
 };
 
 const POLY_COLORS: Record<string, string> = {
@@ -72,23 +71,8 @@ const HAZARD_COLORS: Record<string, string> = {
 };
 
 function buildStyle(mapType: string) {
-  const sources: any = {};
-  const layers: any[] = [];
-  if (mapType === "golf") {
-    // Clean, satellite-free "Golf View" — a fairway-green canvas the hole draws on.
-    layers.push({ id: "golf-bg", type: "background", paint: { "background-color": "#2f7d47" } });
-  } else if (mapType === "map" || mapType === "terrain") {
-    sources.osm = { type: "raster", tiles: [OSM], tileSize: 256, maxzoom: 19 };
-    layers.push({ id: "osm", type: "raster", source: "osm" });
-  } else {
-    sources.esri = { type: "raster", tiles: [ESRI_SAT], tileSize: 256, maxzoom: 19 };
-    layers.push({ id: "esri", type: "raster", source: "esri" });
-    if (mapType === "hybrid") {
-      sources.esriRef = { type: "raster", tiles: [ESRI_REF], tileSize: 256, maxzoom: 19 };
-      layers.push({ id: "esriRef", type: "raster", source: "esriRef" });
-    }
-  }
-  return { version: 8, sources, layers } as any;
+  if (mapType !== "golf") return imageryStyle();
+  return { version: 8, sources: {}, layers: [{ id: "golf-bg", type: "background", paint: { "background-color": "#2f7d47" } }] } as any;
 }
 
 function line(coords: LatLng[]): GeoJSON.Feature {
@@ -107,6 +91,7 @@ function ringCoords(c: LatLng, meters: number): [number, number][] {
 }
 
 export function GolfMap({
+  showImageryCredit = true,
   center,
   zoom = 17,
   mapType = "satellite",
@@ -144,6 +129,8 @@ export function GolfMap({
 }: Props) {
   const cameraRef = useRef<CameraRef>(null);
   const mapRef = useRef<MapRef>(null);
+  const [mapReady, setMapReady] = useState(0);
+  const [viewport, setViewport] = useState({ width: 360, height: 600 });
   const mapStyle = useMemo(() => buildStyle(mapType), [mapType]);
 
   useEffect(() => {
@@ -180,16 +167,17 @@ export function GolfMap({
   }, [focusKey]);
 
   // Hole-up orientation: frame the hole with the direction of play pointing up
-  // (tee at bottom, green at top) — the Hole19-style rotating fairway view.
+  // (tee at bottom, green at top) with only mapper-supplied surfaces.
   useEffect(() => {
     if (!holeUpKey || !holeUp) return;
     const b = bearingDeg(holeUp.from, holeUp.to);
-    const mid = { lat: (holeUp.from.lat + holeUp.to.lat) / 2, lng: (holeUp.from.lng + holeUp.to.lng) / 2 };
-    const dM = (haversineMeters(holeUp.from, holeUp.to) as number) || 300;
-    const z = dM > 460 ? 15.1 : dM > 320 ? 15.7 : dM > 200 ? 16.3 : 16.9;
-    cameraRef.current?.easeTo({ center: [mid.lng, mid.lat], bearing: b, zoom: z, duration: 750 });
+    const points = [holeUp.from, holeUp.to, greens?.greenFront, greens?.greenBack, ...polygons.flatMap((p) => p.points), ...hazards.map((h) => ({ lat: h.lat, lng: h.lng }))].filter(validPoint);
+    const lngs = points.map((p) => p.lng), lats = points.map((p) => p.lat);
+    cameraRef.current?.fitBounds([Math.min(...lngs), Math.min(...lats), Math.max(...lngs), Math.max(...lats)], {
+      bearing: b, pitch: 0, duration: 750, padding: { top: Math.min(140, viewport.height * 0.22), bottom: Math.min(220, viewport.height * 0.32), left: 36, right: 36 },
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [holeUpKey]);
+  }, [holeUpKey, viewport.width, viewport.height, mapReady]);
 
   const shotFeatures: GeoJSON.FeatureCollection = {
     type: "FeatureCollection",
@@ -212,13 +200,16 @@ export function GolfMap({
   }, [distanceArcs, arcCenter?.lat, arcCenter?.lng, arcUnit]);
 
   return (
+    <View style={[StyleSheet.absoluteFill, style]}>
     <Map
       ref={mapRef}
-      style={[StyleSheet.absoluteFill, style]}
+      style={StyleSheet.absoluteFill}
+      onLayout={(e) => setViewport(e.nativeEvent.layout)}
       mapStyle={mapStyle}
+      onDidFinishLoadingMap={() => setMapReady((n) => n + 1)}
       compass={false}
       logo={false}
-      attribution={false}
+      attribution={true}
       onPress={(e: any) => onMapPress && onMapPress({ lat: e.nativeEvent.lngLat[1], lng: e.nativeEvent.lngLat[0] })}
       onLongPress={(e: any) => onMapLongPress && onMapLongPress({ lat: e.nativeEvent.lngLat[1], lng: e.nativeEvent.lngLat[0] })}
       onRegionWillChange={(e: any) => e.nativeEvent?.userInteraction && onUserPan && onUserPan()}
@@ -226,21 +217,9 @@ export function GolfMap({
     >
       <Camera ref={cameraRef} initialViewState={{ center: [center.lng, center.lat], zoom }} />
 
-      {/* Golf View schematic: fairway corridor tee→green + a clear green pad */}
-      {golfView && tee && greens?.greenCenter && (
-        <GeoJSONSource id="fairway-corridor" data={line([tee, greens.greenCenter])}>
-          <Layer id="fairway-corridor-line" type="line" source="fairway-corridor" layout={{ "line-cap": "round", "line-join": "round" }} paint={{ "line-color": "#5aa86a", "line-width": 22, "line-opacity": 0.55 }} />
-        </GeoJSONSource>
-      )}
-      {golfView && greens?.greenCenter && (
-        <GeoJSONSource id="green-pad" data={{ type: "Feature", properties: {}, geometry: { type: "Polygon", coordinates: [ringCoords(greens.greenCenter, greens.greenFront && greens.greenBack ? Math.max(12, (haversineMeters(greens.greenFront, greens.greenBack) as number) / 2) : 15)] } }}>
-          <Layer id="green-pad-fill" type="fill" source="green-pad" paint={{ "fill-color": "#bff0a8", "fill-opacity": 0.9 }} />
-          <Layer id="green-pad-line" type="line" source="green-pad" paint={{ "line-color": "#8fd97a", "line-width": 1.5 }} />
-        </GeoJSONSource>
-      )}
-
-      {polygons.filter((p) => p.type !== "CART_PATH" && p.points.length >= 3).length > 0 && (
-        <GeoJSONSource id="hole-polys" data={{ type: "FeatureCollection", features: polygons.filter((p) => p.type !== "CART_PATH" && p.points.length >= 3).map((p) => ({ type: "Feature", properties: { color: POLY_COLORS[p.type] || "#9ca3af" }, geometry: { type: "Polygon", coordinates: [[...p.points.map((pt) => [pt.lng, pt.lat]), [p.points[0].lng, p.points[0].lat]]] } })) }}>
+      {/* Only mapper-supplied polygons are surfaces. Tee/center lines do not establish a fairway or green. */}
+      {polygons.filter((p) => p.type !== "CART_PATH" && validRing(p.points)).length > 0 && (
+        <GeoJSONSource id="hole-polys" data={{ type: "FeatureCollection", features: polygons.filter((p) => p.type !== "CART_PATH" && validRing(p.points)).map((p) => ({ type: "Feature", properties: { color: POLY_COLORS[p.type] || "#9ca3af" }, geometry: { type: "Polygon", coordinates: [[...p.points.map((pt) => [pt.lng, pt.lat]), [p.points[0].lng, p.points[0].lat]]] } })) }}>
           <Layer id="hole-polys-fill" type="fill" source="hole-polys" paint={{ "fill-color": ["get", "color"], "fill-opacity": 0.35 }} />
           <Layer id="hole-polys-line" type="line" source="hole-polys" paint={{ "line-color": ["get", "color"], "line-width": 1.5 }} />
         </GeoJSONSource>
@@ -350,6 +329,8 @@ export function GolfMap({
 
       {target && <DraggableFlag mapRef={mapRef} target={target} onTargetDrag={onTargetDrag} />}
     </Map>
+    {showImageryCredit && mapType !== "golf" && <ImageryCredit overlay />}
+    </View>
   );
 }
 

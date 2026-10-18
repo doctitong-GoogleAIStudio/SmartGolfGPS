@@ -4,12 +4,14 @@ export type LatLng = { lat: number; lng: number };
 
 export function haversineMeters(a?: LatLng | null, b?: LatLng | null): number | null {
   if (!a || !b) return null;
+  if (![a.lat, a.lng, b.lat, b.lng].every(Number.isFinite) || Math.abs(a.lat) > 90 || Math.abs(b.lat) > 90 || Math.abs(a.lng) > 180 || Math.abs(b.lng) > 180) return null;
   const p1 = (a.lat * Math.PI) / 180;
   const p2 = (b.lat * Math.PI) / 180;
   const dp = ((b.lat - a.lat) * Math.PI) / 180;
   const dl = ((b.lng - a.lng) * Math.PI) / 180;
   const h = Math.sin(dp / 2) ** 2 + Math.cos(p1) * Math.cos(p2) * Math.sin(dl / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
+  const clamped = Math.max(0, Math.min(1, h));
+  return R * 2 * Math.atan2(Math.sqrt(clamped), Math.sqrt(1 - clamped));
 }
 
 export function bearingDeg(a: LatLng, b: LatLng): number {
@@ -25,7 +27,7 @@ export const mToYd = (m: number) => m * 1.0936133;
 export const mToFt = (m: number) => m * 3.28084;
 
 export function fmtDist(meters: number | null | undefined, unit = "yd"): string {
-  if (meters == null) return "--";
+  if (meters == null || !Number.isFinite(meters) || meters < 0) return "--";
   return String(unit === "yd" ? Math.round(mToYd(meters)) : Math.round(meters));
 }
 

@@ -1,29 +1,26 @@
+import { reviewedCourse } from "@/src/lib/navigation";
 import React from "react";
 import { View, Text, StyleSheet } from "react-native";
 import { colors } from "@/src/theme";
 
-// Distance-trust indicator derived from how a course was mapped:
-// HIGH   = hand-mapped in the editor (surveyed points)
-// MEDIUM = simulated holes, but snapped to the real location (geocoded/confirmed)
-// LOW    = simulated holes on an approximate pin
+// Mapping provenance is a declaration, never a measured GPS/survey accuracy claim.
 export function accuracyLevel(course: any) {
   if (!course) return null;
-  if (course.layoutSource === "mapped") return { level: 3, label: "HIGH", color: colors.green, why: "Hand-mapped — surveyed points." };
-  if (course.geocoded) return { level: 2, label: "MEDIUM", color: "#a16207", why: "Simulated holes at the real location." };
-  return { level: 1, label: "LOW", color: colors.zinc400, why: "Approximate pin — distances may vary." };
+  if (reviewedCourse(course)) return { level: 3, label: "REVIEW DECLARED", color: colors.green, why: "Source/license review supplied by the mapper; not independently certified." };
+  return { level: 1, label: "UNVERIFIED", color: colors.zinc400, why: "Directory pins, geocoding and editor saves do not verify playing geometry." };
 }
 
 export function LayoutAccuracy({ course, showWhy, style, testID }: { course: any; showWhy?: boolean; style?: any; testID?: string }) {
   const a = accuracyLevel(course);
   if (!a || course?.isDemo) return null;
   return (
-    <View style={[styles.wrap, style]} testID={testID || `layout-accuracy-${a.label.toLowerCase()}`}>
+    <View style={[styles.wrap, style]} testID={testID || `layout-accuracy-${a.label.toLowerCase().replace(/ /g, "-")}`}>
       <View style={styles.bars}>
         {[1, 2, 3].map((i) => (
           <View key={i} style={[styles.bar, { height: 5 + i * 3, backgroundColor: i <= a.level ? a.color : colors.zinc200 }]} />
         ))}
       </View>
-      <Text style={[styles.label, { color: a.color }]}>{a.label} ACCURACY</Text>
+      <Text style={[styles.label, { color: a.color }]}>{a.label}</Text>
       {showWhy && <Text style={styles.why} numberOfLines={1}>· {a.why}</Text>}
     </View>
   );
