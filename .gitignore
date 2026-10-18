@@ -86,3 +86,9 @@ frontend/node_modules/.cache/default-development/2.pack
 .emergent/cross_platform_fork_in_progress
 .emergent/cross_platform_fork_setup_complete
 .emergent/.fork_pod_run_id
+.env
+.env.*
+*.env
+credentials.json
+*.key
+.credentials
