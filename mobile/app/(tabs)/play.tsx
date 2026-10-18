@@ -7,6 +7,7 @@ import * as Speech from "expo-speech";
 import { colors, font } from "@/src/theme";
 import { HoleDetector, usableHole, greenDistances, containsPoint, validRing } from "@/src/lib/navigation";
 import { imageryConfigured } from "@/src/lib/imagery";
+import { ImageryCredit } from "@/src/components/ImageryCredit";
 import { GolfMap } from "@/src/components/GolfMap";
 import { useGPS } from "@/src/hooks/useGPS";
 import { useSettings } from "@/src/context/SettingsContext";
@@ -43,7 +44,7 @@ export default function Rangefinder() {
   const [target, setTarget] = useState<LatLng | null>(null);
   const [targetLabel, setTargetLabel] = useState("PIN");
   const [setBallMode, setSetBallMode] = useState(false);
-  const [mapType, setMapType] = useState<"satellite" | "hybrid" | "map" | "golf" | "terrain">("golf");
+  const [mapType, setMapType] = useState<"satellite" | "hybrid" | "map" | "golf" | "terrain">(imageryConfigured ? "satellite" : "golf");
   const [elev, setElev] = useState<any>(null);
   const [wind, setWind] = useState<{ speed: number; dir: string }>({ speed: 0, dir: "none" });
   const [autoWx, setAutoWx] = useState(false);
@@ -540,6 +541,7 @@ export default function Rangefinder() {
   return (
     <View style={styles.screen} testID="rangefinder-screen">
       <GolfMap
+        showImageryCredit={false}
         center={center}
         mapType={mapType}
         onMapPress={onMapPress}
@@ -802,6 +804,7 @@ export default function Rangefinder() {
 
       {/* Bottom stack */}
       <View style={styles.bottom} pointerEvents="box-none">
+        {mapType !== "golf" && <ImageryCredit />}
         {fcb && fcb.center != null && (
           <View style={styles.fcbStrip} testID="fcb-strip">
             {([["FRONT", fcb.front], ["CENTER", fcb.center], ["BACK", fcb.back]] as [string, number | null][]).map(([l, v]) => (

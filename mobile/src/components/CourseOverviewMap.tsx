@@ -1,4 +1,5 @@
 import { imageryStyle } from "@/src/lib/imagery";
+import { ImageryCredit } from "./ImageryCredit";
 import React, { useMemo, useRef } from "react";
 import { View, Text, StyleSheet } from "react-native";
 import { Map, Camera, Marker, GeoJSONSource, Layer, type CameraRef } from "@maplibre/maplibre-react-native";
@@ -43,7 +44,8 @@ export function CourseOverviewMap({ holes, onHolePress, gpsPos, pois = [], focus
   }, [focusKey]);
 
   return (
-    <Map style={[StyleSheet.absoluteFill, style]} mapStyle={MAP_STYLE} compass={false} logo={false} attribution={true} onDidFinishLoadingMap={fit} testID="course-overview-map">
+    <View style={[StyleSheet.absoluteFill, style]}>
+    <Map style={StyleSheet.absoluteFill} mapStyle={MAP_STYLE} compass={false} logo={false} attribution={true} onDidFinishLoadingMap={fit} testID="course-overview-map">
       <Camera ref={cameraRef} initialViewState={{ center: pts[0] ? [pts[0].lng, pts[0].lat] : [122, 12.6], zoom: 14 }} />
 
       {route.length > 1 && (
@@ -94,6 +96,8 @@ export function CourseOverviewMap({ holes, onHolePress, gpsPos, pois = [], focus
         </Marker>
       )}
     </Map>
+    <ImageryCredit overlay />
+    </View>
   );
 }
 

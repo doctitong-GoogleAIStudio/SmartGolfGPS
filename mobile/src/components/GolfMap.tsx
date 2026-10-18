@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { View, Text, StyleSheet, PanResponder } from "react-native";
 import { Map, Camera, Marker, GeoJSONSource, Layer, type CameraRef, type MapRef } from "@maplibre/maplibre-react-native";
 import { imageryStyle } from "@/src/lib/imagery";
+import { ImageryCredit } from "./ImageryCredit";
 import { validPoint } from "@/src/lib/gpsQuality";
 import { validRing } from "@/src/lib/navigation";
 import { colors, font } from "@/src/theme";
@@ -51,6 +52,7 @@ type Props = {
   flyoverKey?: number;
   layups?: { pt: LatLng; label: string }[];
   style?: any;
+  showImageryCredit?: boolean;
 };
 
 const POLY_COLORS: Record<string, string> = {
@@ -89,6 +91,7 @@ function ringCoords(c: LatLng, meters: number): [number, number][] {
 }
 
 export function GolfMap({
+  showImageryCredit = true,
   center,
   zoom = 17,
   mapType = "satellite",
@@ -197,9 +200,10 @@ export function GolfMap({
   }, [distanceArcs, arcCenter?.lat, arcCenter?.lng, arcUnit]);
 
   return (
+    <View style={[StyleSheet.absoluteFill, style]}>
     <Map
       ref={mapRef}
-      style={[StyleSheet.absoluteFill, style]}
+      style={StyleSheet.absoluteFill}
       onLayout={(e) => setViewport(e.nativeEvent.layout)}
       mapStyle={mapStyle}
       onDidFinishLoadingMap={() => setMapReady((n) => n + 1)}
@@ -325,6 +329,8 @@ export function GolfMap({
 
       {target && <DraggableFlag mapRef={mapRef} target={target} onTargetDrag={onTargetDrag} />}
     </Map>
+    {showImageryCredit && mapType !== "golf" && <ImageryCredit overlay />}
+    </View>
   );
 }
 

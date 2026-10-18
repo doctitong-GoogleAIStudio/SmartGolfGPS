@@ -6,7 +6,7 @@ import * as Crypto from "expo-crypto";
 import { Ionicons } from "@expo/vector-icons";
 import { colors } from "@/src/theme";
 import { usableHole } from "@/src/lib/navigation";
-import { imageryConfigured } from "@/src/lib/imagery";
+import { imageryConfigured, imageryTracingAllowed } from "@/src/lib/imagery";
 import { GolfMap } from "@/src/components/GolfMap";
 import { useGPS } from "@/src/hooks/useGPS";
 import { api } from "@/src/lib/api";
@@ -114,10 +114,10 @@ export default function CourseEditor() {
 
   return (
     <View style={styles.screen} testID="course-editor-screen">
-      <GolfMap center={center} zoom={17} mapType="satellite" onMapPress={onMapPress} tee={hole.tee} greens={hole} hazards={hole.hazards} onHazardPress={onHazardPress} gpsPos={gpsPos} pois={coursePois} polygons={livePolys} recenterKey={holeIdx + 1} />
+      <GolfMap center={center} zoom={17} mapType={imageryTracingAllowed ? "satellite" : "golf"} onMapPress={onMapPress} tee={hole.tee} greens={hole} hazards={hole.hazards} onHazardPress={onHazardPress} gpsPos={gpsPos} pois={coursePois} polygons={livePolys} recenterKey={holeIdx + 1} />
 
       <View style={{ position: "absolute", top: insets.top + 65, left: 12, right: 12, padding: 10, backgroundColor: "#fff", borderRadius: 8 }}>
-        <Text style={{ fontSize: 11 }}>{imageryConfigured ? "Editor preview: imagery alone does not verify boundaries." : "Licensed imagery is not configured. Supply provider configuration before tracing boundaries."}</Text>
+        <Text style={{ fontSize: 11 }}>{imageryTracingAllowed ? "Editor preview: imagery alone does not verify boundaries." : imageryConfigured ? "This imagery license is for display. Use survey or separately licensed mapping coordinates in the editor." : "Licensed imagery is not configured. Use independently verified mapping coordinates."}</Text>
         <Pressable testID="editor-review-mapping" onPress={() => setReviewOpen(true)}><Text style={{ color: colors.green, fontWeight: "700", paddingTop: 6 }}>SOURCE, LICENSE & MAPPING REVIEW</Text></Pressable>
       </View>
       <Modal visible={reviewOpen} transparent animationType="slide" onRequestClose={() => setReviewOpen(false)}>

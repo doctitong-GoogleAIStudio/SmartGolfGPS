@@ -1,4 +1,5 @@
 import { imageryStyle } from "@/src/lib/imagery";
+import { ImageryCredit } from "./ImageryCredit";
 import React, { useEffect, useRef } from "react";
 import { StyleSheet, View, Text } from "react-native";
 import { Map, Camera, Marker, type CameraRef } from "@maplibre/maplibre-react-native";
@@ -26,8 +27,9 @@ export function DirectoryMap({ courses, selectedName, onSelect, style }: { cours
   }, [boundsKey]);
 
   return (
+    <View style={[StyleSheet.absoluteFill, style]}>
     <Map
-      style={[StyleSheet.absoluteFill, style]}
+      style={StyleSheet.absoluteFill}
       mapStyle={MAP_STYLE}
       compass={false}
       logo={false}
@@ -58,6 +60,8 @@ export function DirectoryMap({ courses, selectedName, onSelect, style }: { cours
         );
       })}
     </Map>
+    <ImageryCredit overlay />
+    </View>
   );
 }
 

@@ -10,6 +10,29 @@ const p = (north, east) => ({ lat: north / 111195, lng: east / 111195 });
 const rectangle = (north, east, length, width) => [p(north, east), p(north, east + width), p(north + length, east + width), p(north + length, east)];
 const course = () => ({ layoutSource: "mapped", mappingReview: { reviewer: "Test harness", source: "Synthetic TEST ONLY", license: "test only", reviewedAt: "2026-01-01T00:00:00Z" }, holes: [0, 150].map((east, i) => ({ holeNumber: i + 1, tee: p(0, east), greenCenter: p(300, east), greenFront: p(290, east), greenBack: p(310, east), polygons: [{ type: "FAIRWAY", points: rectangle(10, east - 15, 280, 30) }, { type: "GREEN", points: rectangle(290, east - 10, 20, 20) }] })) });
 const sample = (timestamp = 10000, accuracy = 5, point = p(0, 0)) => ({ timestamp, accuracy, point });
+
+test("provider credits require the real MapTiler host and tracing is opt-in", () => {
+  const names = ["EXPO_PUBLIC_IMAGERY_TILE_URL", "EXPO_PUBLIC_IMAGERY_ATTRIBUTION", "EXPO_PUBLIC_IMAGERY_LICENSE_REFERENCE", "EXPO_PUBLIC_IMAGERY_TRACING_ALLOWED"];
+  const saved = names.map(n => process.env[n]);
+  const load = () => { delete require.cache[require.resolve("../.test-build/imagery.js")]; return require("../.test-build/imagery.js"); };
+  try {
+    process.env[names[0]] = "https://api.maptiler.com/maps/hybrid-v4/256/{z}/{x}/{y}.jpg?key=TEST_ONLY";
+    process.env[names[1]] = "Test provider attribution";
+    process.env[names[2]] = "TEST LICENSE ONLY";
+    delete process.env[names[3]];
+    assert.equal(load().imageryIsMapTiler, true);
+    assert.equal(load().imageryTracingAllowed, false);
+    process.env[names[0]] = "https://api.maptiler.com.example.test/{z}/{x}/{y}.jpg";
+    assert.equal(load().imageryIsMapTiler, false);
+    process.env[names[3]] = "true";
+    assert.equal(load().imageryTracingAllowed, true);
+    process.env[names[2]] = "";
+    assert.equal(load().imageryTracingAllowed, false);
+  } finally {
+    names.forEach((n,i) => saved[i] === undefined ? delete process.env[n] : process.env[n] = saved[i]);
+    delete require.cache[require.resolve("../.test-build/imagery.js")];
+  }
+});
 test("known geodesic distance, zero and symmetric distance", () => { assert.ok(Math.abs(haversineMeters(p(0,0), p(0,100)) - 100) < 0.01);assert.equal(haversineMeters(p(0,0),p(0,0)),0);assert.equal(haversineMeters(p(1,2),p(3,4)),haversineMeters(p(3,4),p(1,2))); });
 test("dateline and antipodes stay finite", () => { assert.ok(haversineMeters({lat:0,lng:179.9},{lat:0,lng:-179.9}) < 23000);assert.ok(Number.isFinite(haversineMeters({lat:0,lng:0},{lat:0,lng:180}))); });
 test("invalid/missing coordinates and nonfinite displays are unavailable", () => { assert.equal(haversineMeters(p(NaN,0),p(0,0)),null);assert.equal(haversineMeters(null,p(0,0)),null);assert.equal(fmtDist(Infinity),"--");assert.equal(fmtDist(-1),"--"); });
