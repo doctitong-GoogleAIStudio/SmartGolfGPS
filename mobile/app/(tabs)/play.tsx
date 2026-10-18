@@ -5,6 +5,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import * as Speech from "expo-speech";
 import { colors, font } from "@/src/theme";
+import { HoleDetector, usableHole, greenDistances, containsPoint, validRing } from "@/src/lib/navigation";
+import { imageryConfigured } from "@/src/lib/imagery";
 import { GolfMap } from "@/src/components/GolfMap";
 import { useGPS } from "@/src/hooks/useGPS";
 import { useSettings } from "@/src/context/SettingsContext";
@@ -13,7 +15,7 @@ import { computePlaysLike } from "@/src/lib/playsLike";
 import { recommendClub } from "@/src/lib/clubRec";
 import { api, cachedGet, getActiveRound, setActiveRound, ActiveRound } from "@/src/lib/api";
 import { storage } from "@/src/utils/storage";
-import { startBackgroundTracking, stopBackgroundTracking, drainBackgroundPath } from "@/src/lib/locationTask";
+import { startBackgroundTracking, stopBackgroundTracking, drainBackgroundPath, acknowledgeBackgroundPath } from "@/src/lib/locationTask";
 import { offlineSupported, listOfflineCourseIds, downloadCourseTiles } from "@/src/lib/offline";
 import { toast } from "@/src/lib/toast";
 
@@ -31,7 +33,7 @@ export default function Rangefinder() {
   const insets = useSafeAreaInsets();
   const { settings } = useSettings();
   const unit = settings.distanceUnit;
-  const { pos: gpsPos, accuracy, quality, error: gpsError, speed, heading, canAskAgain, requestAgain } = useGPS(settings.gpsTracking !== false);
+  const { pos: gpsPos, accuracy, quality, error: gpsError, speed, heading, canAskAgain, requestAgain, mocked } = useGPS(settings.gpsTracking !== false);
 
   const [activeRound, setActive] = useState<ActiveRound>(null);
   const [course, setCourse] = useState<any>(null);
@@ -53,7 +55,9 @@ export default function Rangefinder() {
   const [shotResult, setShotResult] = useState<any>(null);
   const [showClubPick, setShowClubPick] = useState(false);
   const [walkAnchor, setWalkAnchor] = useState<LatLng | null>(null);
-  const [holeSuggestion, setHoleSuggestion] = useState<{ i: number; d: number } | null>(null);
+  const [manualHole, setManualHole] = useState(false);
+  const detectorRef = useRef(new HoleDetector());
+  const navigationReady = useRef(false);
   const [camMode, setCamMode] = useState<"free" | "follow" | "heading">("free");
   const [gpsPath, setGpsPath] = useState<{ lat: number; lng: number; t: number }[]>([]);
   const [speaking, setSpeaking] = useState(false);
@@ -78,9 +82,11 @@ export default function Rangefinder() {
   const wxReqRef = useRef<{ pos: LatLng | null; time: number }>({ pos: null, time: 0 });
   const pathBufRef = useRef<{ lat: number; lng: number; t: number }[]>([]);
   const elevReqRef = useRef<{ ball: LatLng | null; target: LatLng | null }>({ ball: null, target: null });
-  const dismissedHoleRef = useRef<number | null>(null);
+
 
   const hole = course?.holes?.[holeIdx] || null;
+  const geometryReady = useMemo(() => usableHole(course, hole), [course, hole]);
+  const mappedHole = geometryReady ? hole : null;
 
   // Load persisted wind/autowx once.
   useEffect(() => {
@@ -94,6 +100,7 @@ export default function Rangefinder() {
   useFocusEffect(
     useCallback(() => {
       let alive = true;
+      navigationReady.current = false;
       (async () => {
         cachedGet("/bag", "bag").then((b) => alive && setBag(b)).catch(() => {});
         const a = await getActiveRound();
@@ -112,16 +119,20 @@ export default function Rangefinder() {
             if (focus) storage.removeItem("sg_focus");
             const pinsRaw = await storage.getItem<string>(`sg_pins_${cid}`, "");
             const loadedPins = pinsRaw ? JSON.parse(pinsRaw) : {};
+            const navRaw = await storage.getItem<string>(`sg_navigation_v1_${cid}`, "");
+            let nav: any = {};try { nav = navRaw ? JSON.parse(navRaw) : {}; } catch {}
             pinsRef.current = loadedPins;
             if (alive) {
               setPins(loadedPins);
               setCourse(c);
-              setHoleIdx(sh ? Number(sh) - 1 : (a?.currentHole || 1) - 1);
+              const desired = sh ? Number(sh) : a?.currentHole || nav.holeNumber || 1;
+              setHoleIdx(Math.max(0, Math.min(c.holes.length - 1, desired - 1)));
+              setManualHole(!!nav.manual);detectorRef.current.reset();navigationReady.current = true;
               if (focus === "green") setPendingGreen(true);
             }
           } else {
             const cs = await cachedGet<any[]>("/courses", "courses");
-            if (alive && cs[0]) setCourse(cs[0]);
+            if (alive && cs[0]) { setCourse(cs[0]);setHoleIdx(0);setManualHole(false);detectorRef.current.reset();navigationReady.current = true; }
           }
         } catch {}
       })();
@@ -129,19 +140,18 @@ export default function Rangefinder() {
     }, [])
   );
 
-  // Ball follows GPS in gps mode.
+  // Never silently substitute the tee for a missing/stale GPS fix.
   useEffect(() => {
-    if (ballSource === "gps" && gpsPos) setBall(gpsPos);
-  }, [gpsPos, ballSource]);
-  useEffect(() => {
-    if (!ball && !gpsPos && hole?.tee) { setBall(hole.tee); setBallSource("manual"); }
-  }, [hole, ball, gpsPos]);
+    if (ballSource === "gps") setBall(gpsPos && (!mappedHole?.tee || haversineMeters(gpsPos, mappedHole.tee)! <= 2500) ? gpsPos : null);
+  }, [gpsPos, ballSource, mappedHole]);
 
   // Default target: saved pin or green center on hole change; trigger hole flyover / green focus.
   useEffect(() => {
-    if (!hole) return;
+    if (!hole || !geometryReady) { setTarget(null);return; }
     const hn = String(hole.holeNumber);
-    const savedPin = pinsRef.current[hn];
+    const candidate = pinsRef.current[hn];
+    const green = hole.polygons?.find((p: any) => p.type === "GREEN" && validRing(p.points));
+    const savedPin = candidate && green && containsPoint(green.points, candidate) ? candidate : null;
     if (savedPin) { setTarget(savedPin); setTargetLabel("PIN"); }
     else if (hole.greenCenter) { setTarget(hole.greenCenter); setTargetLabel("CENTER"); }
     if (pendingGreen) {
@@ -152,15 +162,18 @@ export default function Rangefinder() {
       if (mapType === "golf") setHoleUpKey((k) => k + 1);
       else setFlyoverKey((k) => k + 1);
     }
-  }, [holeIdx, course, pendingGreen]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [holeIdx, course, pendingGreen, geometryReady]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const savePin = (pos: LatLng) => {
-    if (!hole || !course) return;
+    if (!hole || !course || !geometryReady) return false;
+    const green = hole.polygons?.find((p: any) => p.type === "GREEN" && validRing(p.points));
+    if (!green || !containsPoint(green.points, pos)) { toast.error("Pin must be inside a reviewed green boundary");return false; }
     const hn = String(hole.holeNumber);
     const next = { ...pinsRef.current, [hn]: pos };
     pinsRef.current = next;
     setPins(next);
     storage.setItem(`sg_pins_${course.id}`, JSON.stringify(next));
+    return true;
   };
 
   // Background tracking lifecycle for an active round.
@@ -218,14 +231,7 @@ export default function Rangefinder() {
   }, [autoWx, wx, ball, target, wind, settings.windUnit]);
 
   const distM = useMemo(() => haversineMeters(ball, target), [ball, target]);
-  const fcb = useMemo(() => {
-    if (!ball || !hole) return null;
-    return {
-      front: haversineMeters(ball, hole.greenFront),
-      center: haversineMeters(ball, hole.greenCenter),
-      back: haversineMeters(ball, hole.greenBack),
-    };
-  }, [ball, hole]);
+  const fcb = useMemo(() => ball && mappedHole ? greenDistances(ball, mappedHole) : null, [ball, mappedHole]);
 
   // Elevation (throttled + debounced).
   useEffect(() => {
@@ -257,7 +263,7 @@ export default function Rangefinder() {
 
   // Caddie context snapshot.
   useEffect(() => {
-    if (distM == null) return;
+    if (distM == null) { storage.removeItem("sg_caddie_ctx");return; }
     const ctx = {
       hole: hole?.holeNumber,
       par: hole?.par,
@@ -283,8 +289,8 @@ export default function Rangefinder() {
     pathBufRef.current.push(pt);
     setGpsPath((p) => (p.length > 500 ? [...p.slice(-400), pt] : [...p, pt]));
     if (pathBufRef.current.length >= 10) {
-      const points = pathBufRef.current.splice(0);
-      api.post(`/rounds/${activeRound.id}/track`, { points }).catch(() => {});
+      const points = pathBufRef.current.splice(0, 200);
+      api.post(`/rounds/${activeRound.id}/track`, { points }).catch(() => { pathBufRef.current.unshift(...points); });
     }
   }, [gpsPos]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -294,9 +300,10 @@ export default function Rangefinder() {
     drainBackgroundPath().then((pts) => {
       if (pts.length) {
         setGpsPath((p) => [...p, ...pts].slice(-500));
-        api.post(`/rounds/${activeRound.id}/track`, { points: pts.slice(0, 200) }).catch(() => {});
+        const batch = pts.slice(0, 200);
+        api.post(`/rounds/${activeRound.id}/track`, { points: batch }).then(() => acknowledgeBackgroundPath(batch)).catch(() => {});
       }
-    });
+    }).catch(() => toast.error("Location history could not be read; saved data has been kept"));
   }, [activeRound]);
 
   // Load current round scores (for the putt reminder).
@@ -307,7 +314,7 @@ export default function Rangefinder() {
 
   // Putt reminder: when the golfer leaves the green without logging putts.
   useEffect(() => {
-    if (!gpsPos || !activeRound || !hole?.greenCenter || !roundScores) return;
+    if (!gpsPos || !activeRound || !mappedHole?.greenCenter || !roundScores) return;
     const d = haversineMeters(gpsPos, hole.greenCenter) as number;
     if (d < 18) {
       nearGreenRef.current = true;
@@ -323,7 +330,7 @@ export default function Rangefinder() {
 
   // Auto-advance: after holing out and walking off the green, offer the next hole.
   useEffect(() => {
-    if (!gpsPos || !activeRound || !hole?.greenCenter || !course) return;
+    if (!gpsPos || !activeRound || !mappedHole?.greenCenter || !course) return;
     const d = haversineMeters(gpsPos, hole.greenCenter) as number;
     if (d < 18) {
       advNearGreenRef.current = true;
@@ -395,7 +402,10 @@ export default function Rangefinder() {
     [setBallMode, camMode]
   );
 
-  const goHole = (next: number) => {
+  const goHole = (next: number, automatic = false) => {
+    if (!course?.holes?.[next]) return;
+    if (!automatic) { setManualHole(true);detectorRef.current.reset(); }
+    storage.setItem(`sg_navigation_v1_${course.id}`, JSON.stringify({ manual: !automatic, holeNumber: next + 1 }));
     const leaving = hole;
     if (activeRound && roundScores && leaving && next !== holeIdx) {
       const sc = roundScores.find((s: any) => s.hole === leaving.holeNumber);
@@ -405,7 +415,7 @@ export default function Rangefinder() {
       }
     }
     setHoleIdx(next);
-    setHoleSuggestion(null);
+
     if (activeRound) {
       const upd = { ...activeRound, currentHole: next + 1 };
       setActive(upd);
@@ -418,19 +428,14 @@ export default function Rangefinder() {
     goHole(Math.max(0, Math.min(course.holes.length - 1, holeIdx + delta)));
   };
 
-  // Nearest hole suggestion.
+  // Reviewed polygons only; sustained evidence and ambiguity rejection prevent adjacent-hole jumps.
   useEffect(() => {
-    if (!gpsPos || !course) { setHoleSuggestion(null); return; }
-    let best: { i: number; d: number } | null = null;
-    course.holes.forEach((h: any, i: number) => {
-      [h.tee, h.greenCenter].filter(Boolean).forEach((p: LatLng) => {
-        const d = haversineMeters(gpsPos, p) as number;
-        if (!best || d < best.d) best = { i, d };
-      });
-    });
-    if (best && best.i !== holeIdx && best.d < 120 && dismissedHoleRef.current !== best.i) setHoleSuggestion(best);
-    else setHoleSuggestion(null);
-  }, [gpsPos, course, holeIdx]);
+    if (!navigationReady.current || !gpsPos || accuracy == null || !course || mocked) return;
+    const next = detectorRef.current.update(course, holeIdx, gpsPos, accuracy, performance.now(), manualHole);
+    if (next !== holeIdx) goHole(next, true);
+    // goHole is intentionally read from the current render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gpsPos, accuracy, course, holeIdx, manualHole, mocked]);
 
   const walkDistM = useMemo(() => (walkAnchor && gpsPos ? haversineMeters(walkAnchor, gpsPos) : null), [walkAnchor, gpsPos]);
 
@@ -444,7 +449,8 @@ export default function Rangefinder() {
 
   const cycleMapType = () => {
     setMapType((m) => {
-      const next = m === "golf" ? "satellite" : m === "satellite" ? "terrain" : "golf";
+      const next = m === "golf" ? "satellite" : "golf";
+      if (next !== "golf" && !imageryConfigured) { toast.info("Imagery not configured", "A licensed tile provider and attribution are required.");return "golf"; }
       toast.info(next === "golf" ? "Golf View" : next === "satellite" ? "Satellite View" : "Terrain View");
       if (next === "golf") setHoleUpKey((k) => k + 1);
       return next;
@@ -452,14 +458,15 @@ export default function Rangefinder() {
   };
 
   const startShot = (club: string) => {
-    if (!ball) { toast.error("No ball position yet"); return; }
+    if (!ball || mocked || ballSource === "gps" && (!gpsPos || accuracy == null || accuracy > 20)) { toast.error("Use a fresh GPS fix with estimated accuracy ≤20m, or an explicit manual position");return; }
     setShot({ start: ball, club, targetDist: distM, playsLike: pl?.playsLikeMeters });
     setWalkAnchor(ballSource === "gps" && gpsPos ? gpsPos : ball);
     setShowClubPick(false);
     toast.success(`Shot started with ${club}`, "Walk to your ball, then tap BALL FOUND.");
   };
   const endShot = () => {
-    const end = ballSource === "gps" && gpsPos ? gpsPos : ball;
+    if (!shot || !ball || mocked || ballSource === "gps" && (!gpsPos || accuracy == null || accuracy > 20)) { toast.error("Wait for a fresh GPS fix or set an explicit manual position");return; }
+    const end = ballSource === "gps" ? gpsPos! : ball;
     const d = haversineMeters(shot.start, end) as number;
     setShotResult({ ...shot, end, distance: d, fairway: null, direction: null });
     setShot(null);
@@ -491,7 +498,7 @@ export default function Rangefinder() {
   };
 
   const center = ball || gpsPos || hole?.tee || { lat: course?.latitude || DEFAULT_CENTER.lat, lng: course?.longitude || DEFAULT_CENTER.lng };
-  const targetCards: [string, LatLng, string?][] = hole
+  const targetCards: [string, LatLng, string?][] = mappedHole
     ? ([
         ["CENTER", hole.greenCenter],
         ["FRONT", hole.greenFront],
@@ -502,9 +509,9 @@ export default function Rangefinder() {
 
   const gpsLive = ballSource === "gps" && !!gpsPos;
 
-  // Layup markers along the fairway corridor (distances TO the green), Golf View only.
+  // Straight-line distance references to the mapped green; never a safe route or inferred fairway.
   const layups = useMemo(() => {
-    if (mapType !== "golf" || !hole?.tee || !hole?.greenCenter) return [];
+    if (mapType !== "golf" || !mappedHole?.tee || !mappedHole?.greenCenter) return [];
     const tee = hole.tee, g = hole.greenCenter;
     const holeLenM = haversineMeters(tee, g) as number;
     const marks = unit === "m" ? [90, 140, 180] : [100, 150, 200];
@@ -518,9 +525,10 @@ export default function Rangefinder() {
       }
     });
     return out;
-  }, [mapType, hole, unit]);
+  }, [mapType, hole, unit, mappedHole]);
 
   const greenZoom = () => {
+    if (!geometryReady) { toast.error("Reviewed green mapping is required");return; }
     const p = pinsRef.current[String(hole?.holeNumber)] || hole?.greenCenter;
     if (!p) { toast.error("No green data for this hole"); return; }
     setTarget(p);
@@ -539,10 +547,10 @@ export default function Rangefinder() {
         gpsPos={gpsPos}
         gpsHeading={heading}
         target={target}
-        onTargetDrag={(p) => { setTarget(p); if (targetLabel === "PIN") savePin(p); else setTargetLabel("CUSTOM"); }}
-        tee={hole?.tee}
-        greens={hole}
-        hazards={hole?.hazards || []}
+        onTargetDrag={(p) => { if (targetLabel === "PIN" && !savePin(p)) return;setTarget(p);if (targetLabel !== "PIN") setTargetLabel("CUSTOM"); }}
+        tee={mappedHole?.tee}
+        greens={mappedHole}
+        hazards={mappedHole?.hazards || []}
         onHazardPress={(h) => { setTarget({ lat: h.lat, lng: h.lng }); setTargetLabel(h.name.toUpperCase()); }}
         distLabel={distM != null ? `${fmtDist(distM, unit)} ${unitLabel(unit).toLowerCase()}` : null}
         recenterKey={recenter}
@@ -551,25 +559,25 @@ export default function Rangefinder() {
         gpsPath={activeRound ? gpsPath : []}
         distanceArcs={arcsOn}
         arcUnit={unit}
-        polygons={hole?.polygons || []}
+        polygons={mappedHole?.polygons || []}
         focusKey={greenFocus?.key}
         focusTarget={greenFocus?.point}
-        flyover={hole?.tee && hole?.greenCenter ? { from: hole.tee, to: hole.greenCenter } : null}
+        flyover={mappedHole?.tee && mappedHole?.greenCenter ? { from: mappedHole.tee, to: mappedHole.greenCenter } : null}
         flyoverKey={flyoverKey}
         golfView={mapType === "golf"}
-        holeUp={hole?.tee && hole?.greenCenter ? { from: hole.tee, to: hole.greenCenter } : null}
+        holeUp={mappedHole?.tee && mappedHole?.greenCenter ? { from: mappedHole.tee, to: mappedHole.greenCenter } : null}
         holeUpKey={holeUpKey}
         layups={layups}
       />
 
       {(() => {
         const nextHole = course?.holes?.[holeIdx + 1];
-        const nearGreen = hole?.greenCenter && gpsPos ? (haversineMeters(gpsPos, hole.greenCenter) as number) < 55 : false;
+        const nearGreen = mappedHole?.greenCenter && gpsPos ? (haversineMeters(gpsPos, hole.greenCenter) as number) < 55 : false;
         if (!nearGreen || !nextHole?.tee || !gpsPos) return null;
         const d = haversineMeters(gpsPos, nextHole.tee) as number;
         const dir = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"][Math.round(bearingDeg(gpsPos, nextHole.tee) / 45) % 8];
         return (
-          <Pressable style={styles.nextTee} onPress={() => setHoleIdx(holeIdx + 1)} testID="next-tee-banner">
+          <Pressable style={styles.nextTee} onPress={() => goHole(holeIdx + 1)} testID="next-tee-banner">
             <Ionicons name="walk" size={18} color={colors.charcoal} />
             <Text style={styles.nextTeeTxt}>NEXT TEE · HOLE {nextHole.holeNumber} · {fmtDist(d, unit)} {unitLabel(unit).toLowerCase()} {dir}</Text>
             <Ionicons name="chevron-forward" size={16} color={colors.charcoal} />
@@ -577,7 +585,7 @@ export default function Rangefinder() {
         );
       })()}
 
-      {hazOpen && (hole?.hazards?.length || 0) > 0 && (
+      {hazOpen && (mappedHole?.hazards?.length || 0) > 0 && (
 
         <View style={styles.hazPanel} testID="hazard-panel">
           <Text style={styles.hazPanelTitle}>HAZARDS · from {ball ? "ball" : "you"}</Text>
@@ -592,8 +600,8 @@ export default function Rangefinder() {
                   <View style={{ flex: 1 }}>
                     <Text style={styles.hazName} numberOfLines={1}>{h.name}</Text>
                     <Text style={styles.hazDist}>
-                      {front != null ? `Front ${fmtDist(front, unit)}` : "Front —"}
-                      {carry != null ? `  ·  Carry ${fmtDist(carry, unit)}` : ""} {unitLabel(unit).toLowerCase()}
+                      {front != null ? `Mapped point ${fmtDist(front, unit)}` : "Mapped point —"}
+                      {carry != null ? `  ·  Carry point ${fmtDist(carry, unit)}` : ""} {unitLabel(unit).toLowerCase()}
                     </Text>
                   </View>
                 </Pressable>
@@ -602,6 +610,13 @@ export default function Rangefinder() {
           </ScrollView>
         </View>
       )}
+
+      <View style={{ position: "absolute", top: insets.top + 70, left: 12, right: 12, backgroundColor: "#fff", borderRadius: 10, padding: 10 }} testID="navigation-status">
+        <Pressable testID="auto-hole-toggle" onPress={() => { const manual = !manualHole;setManualHole(manual);detectorRef.current.reset();if (course) storage.setItem(`sg_navigation_v1_${course.id}`, JSON.stringify({ manual, holeNumber: holeIdx + 1 })); }}>
+          <Text style={{ color: colors.charcoal, fontSize: 12, fontWeight: "700" }}>{manualHole ? "MANUAL HOLE · tap to enable Auto" : "AUTO HOLE · tap for manual override"}</Text>
+        </Pressable>
+        <Text style={{ color: colors.zinc600, fontSize: 11 }}>{!geometryReady ? "Playing geometry unverified · review actual course mapping before use" : !gpsPos && ballSource === "gps" ? "Playing distances paused · waiting for fresh GPS" : fcb ? `Green distances: ${fcb.source} · accuracy is an estimate` : "Tap map for a target. Layups are straight-line references, not safe routes."}</Text>
+      </View>
 
       {/* Top bar */}
       <View style={[styles.topBar, { top: insets.top + 6 }]} pointerEvents="box-none">
@@ -635,7 +650,7 @@ export default function Rangefinder() {
             ]}
           >
             <Text style={[styles.gpsBadgeTxt, { color: quality === "GOOD" || quality === "FAIR" ? colors.charcoal : "#fff" }]}>
-              {gpsError === "denied" ? "GPS DENIED" : gpsError ? "NO GPS" : accuracy != null ? `GPS ±${accuracy.toFixed(0)}m ${quality}` : "GPS…"}
+              {gpsError === "denied" ? "GPS DENIED" : gpsError === "stale" ? "GPS STALE" : gpsError ? "NO GPS" : accuracy != null ? `GPS ±${accuracy.toFixed(0)}m EST. ${mocked ? "SIMULATED" : quality}` : "GPS…"}
             </Text>
           </View>
           {settings.tournamentMode && (
@@ -653,17 +668,7 @@ export default function Rangefinder() {
       </View>
 
       {/* Nearest hole suggestion */}
-      {holeSuggestion && (
-        <View style={[styles.suggestBanner, { top: insets.top + 60 }]} testID="hole-suggestion-banner">
-          <Text style={styles.suggestBannerTxt}>Near Hole {course.holes[holeSuggestion.i].holeNumber}?</Text>
-          <Pressable testID="switch-hole-btn" onPress={() => goHole(holeSuggestion.i)} style={styles.suggestSwitch}>
-            <Text style={styles.suggestSwitchTxt}>SWITCH</Text>
-          </Pressable>
-          <Pressable testID="dismiss-hole-suggestion-btn" onPress={() => { dismissedHoleRef.current = holeSuggestion.i; setHoleSuggestion(null); }} style={styles.suggestX}>
-            <Ionicons name="close" size={14} color="#fff" />
-          </Pressable>
-        </View>
-      )}
+
 
       {/* Putt reminder */}
       {puttReminder && (

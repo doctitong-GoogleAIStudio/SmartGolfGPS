@@ -19,6 +19,7 @@
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as SecureStore from "expo-secure-store";
+import { storageKey } from "../../lib/storageScope";
 
 import { AssertNoExtras, StorageBase, StorageItemValue } from "./storage-base";
 
@@ -30,7 +31,7 @@ export class Storage extends StorageBase {
     fallback: Fallback,
   ): Promise<Fallback | null> {
     try {
-      const raw = await AsyncStorage.getItem(key);
+      const raw = await AsyncStorage.getItem(storageKey(key));
       return this.retrieve(raw, fallback);
     } catch (e) {
       this.warn("getItem", key, e);
@@ -43,7 +44,7 @@ export class Storage extends StorageBase {
     value: Value,
   ): Promise<boolean> {
     try {
-      await AsyncStorage.setItem(key, JSON.stringify(value));
+      await AsyncStorage.setItem(storageKey(key), JSON.stringify(value));
       return true;
     } catch (e) {
       this.warn("setItem", key, e);
@@ -53,7 +54,7 @@ export class Storage extends StorageBase {
 
   async removeItem(key: string): Promise<boolean> {
     try {
-      await AsyncStorage.removeItem(key);
+      await AsyncStorage.removeItem(storageKey(key));
       return true;
     } catch (e) {
       this.warn("removeItem", key, e);

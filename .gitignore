@@ -92,3 +92,10 @@ frontend/node_modules/.cache/default-development/2.pack
 credentials.json
 *.key
 .credentials
+
+# Workspace-only validation dependencies
+.test-tools/
+.test-temp/
+.pip-cache/
+.integration-tools/
+.integration-install.log

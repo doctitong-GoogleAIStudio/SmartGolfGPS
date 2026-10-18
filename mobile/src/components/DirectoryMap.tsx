@@ -1,15 +1,10 @@
+import { imageryStyle } from "@/src/lib/imagery";
 import React, { useEffect, useRef } from "react";
 import { StyleSheet, View, Text } from "react-native";
 import { Map, Camera, Marker, type CameraRef } from "@maplibre/maplibre-react-native";
 import { colors } from "@/src/theme";
 
-const ESRI_SAT =
-  "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
-const MAP_STYLE: any = {
-  version: 8,
-  sources: { esri: { type: "raster", tiles: [ESRI_SAT], tileSize: 256, maxzoom: 19 } },
-  layers: [{ id: "esri", type: "raster", source: "esri" }],
-};
+const MAP_STYLE = imageryStyle();
 
 type Entry = { name: string; latitude: number; longitude: number };
 
@@ -36,7 +31,7 @@ export function DirectoryMap({ courses, selectedName, onSelect, style }: { cours
       mapStyle={MAP_STYLE}
       compass={false}
       logo={false}
-      attribution={false}
+      attribution={true}
       testID="directory-map"
     >
       <Camera ref={cameraRef} initialViewState={{ center: [122.0, 12.6], zoom: 4.6 }} />

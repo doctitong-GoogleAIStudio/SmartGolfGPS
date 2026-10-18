@@ -1,10 +1,12 @@
 import React, { useEffect, useState } from "react";
-import { View, Text, StyleSheet, Pressable, ScrollView, TextInput, ActivityIndicator } from "react-native";
+import { View, Text, StyleSheet, Pressable, ScrollView, TextInput, ActivityIndicator, Modal } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Crypto from "expo-crypto";
 import { Ionicons } from "@expo/vector-icons";
 import { colors } from "@/src/theme";
+import { usableHole } from "@/src/lib/navigation";
+import { imageryConfigured } from "@/src/lib/imagery";
 import { GolfMap } from "@/src/components/GolfMap";
 import { useGPS } from "@/src/hooks/useGPS";
 import { api } from "@/src/lib/api";
@@ -36,6 +38,8 @@ export default function CourseEditor() {
   const [mode, setMode] = useState("tee");
   const [draft, setDraft] = useState<{ type: string; points: { lat: number; lng: number }[] } | null>(null);
   const [hazardType, setHazardType] = useState("BUNKER");
+  const [reviewOpen, setReviewOpen] = useState(false);
+  const [review, setReview] = useState({ reviewer: "", source: "", license: "" });
 
   useEffect(() => {
     api.get(`/courses/${id}`).then(setCourse).catch(() => toast.error("Course not found"));
@@ -52,7 +56,7 @@ export default function CourseEditor() {
 
   const patchHole = (p: any) => {
     const holes = course.holes.map((h: any, i: number) => (i === holeIdx ? { ...h, ...p } : h));
-    setCourse({ ...course, holes });
+    setCourse({ ...course, holes, mappingReview: null });
   };
 
   const onMapPress = (p: { lat: number; lng: number }) => {
@@ -81,6 +85,13 @@ export default function CourseEditor() {
     }
   };
 
+  const saveReview = async () => {
+    if (![review.reviewer, review.source, review.license].every((s) => s.trim())) { toast.error("Reviewer, actual mapping source and license are required");return; }
+    const next = { ...course, layoutSource: "mapped", mappingReview: { ...review, reviewedAt: new Date().toISOString() } };
+    if (!next.holes?.length || !next.holes.every((h: any) => usableHole(next, h))) { toast.error("All hole tees/centers and supplied polygons must be valid before declaring review");return; }
+    try { await api.put(`/courses/${id}`, next);setCourse(next);setReviewOpen(false);toast.success("Mapping review declaration saved"); } catch { toast.error("Review could not be saved"); }
+  };
+
   const save = async () => {
     try {
       await api.put(`/courses/${id}`, course);
@@ -105,6 +116,19 @@ export default function CourseEditor() {
     <View style={styles.screen} testID="course-editor-screen">
       <GolfMap center={center} zoom={17} mapType="satellite" onMapPress={onMapPress} tee={hole.tee} greens={hole} hazards={hole.hazards} onHazardPress={onHazardPress} gpsPos={gpsPos} pois={coursePois} polygons={livePolys} recenterKey={holeIdx + 1} />
 
+      <View style={{ position: "absolute", top: insets.top + 65, left: 12, right: 12, padding: 10, backgroundColor: "#fff", borderRadius: 8 }}>
+        <Text style={{ fontSize: 11 }}>{imageryConfigured ? "Editor preview: imagery alone does not verify boundaries." : "Licensed imagery is not configured. Supply provider configuration before tracing boundaries."}</Text>
+        <Pressable testID="editor-review-mapping" onPress={() => setReviewOpen(true)}><Text style={{ color: colors.green, fontWeight: "700", paddingTop: 6 }}>SOURCE, LICENSE & MAPPING REVIEW</Text></Pressable>
+      </View>
+      <Modal visible={reviewOpen} transparent animationType="slide" onRequestClose={() => setReviewOpen(false)}>
+        <View style={{ flex: 1, justifyContent: "center", backgroundColor: "rgba(0,0,0,0.5)", padding: 20 }}><ScrollView style={{ backgroundColor: "#fff", borderRadius: 12, maxHeight: 500 }} contentContainerStyle={{ padding: 20, gap: 12 }}>
+          <Text style={{ fontWeight: "800", fontSize: 18 }}>Declare mapping review</Text>
+          <Text>This declaration requires actual reviewed coordinates and permission to use them. Saving an editor pin or seeing satellite imagery does not establish verified green, fairway or hazard boundaries. Do not certify generated legacy geometry.</Text>
+          {(["reviewer", "source", "license"] as const).map((key) => <TextInput key={key} testID={`mapping-review-${key}`} placeholder={key === "source" ? "Actual survey/mapping source and version" : key === "license" ? "Geometry license or permission reference" : "Responsible reviewer / organization"} value={review[key]} onChangeText={(value) => setReview((r) => ({ ...r, [key]: value }))} style={{ borderWidth: 1, borderColor: colors.zinc200, borderRadius: 6, padding: 10 }} />)}
+          <Pressable testID="confirm-mapping-review" onPress={saveReview}><Text style={{ color: colors.green, fontWeight: "800" }}>I HAVE REVIEWED THE MAPPING · SAVE DECLARATION</Text></Pressable>
+          <Pressable onPress={() => setReviewOpen(false)}><Text>Cancel</Text></Pressable>
+        </ScrollView></View>
+      </Modal>
       <View style={[styles.topBar, { top: insets.top + 6 }]}>
         <Pressable testID="editor-back-btn" onPress={() => router.push("/courses")} style={styles.iconBtn}>
           <Ionicons name="arrow-back" size={20} color={colors.charcoal} />
