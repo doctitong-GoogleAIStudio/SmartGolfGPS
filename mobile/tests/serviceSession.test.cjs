@@ -19,6 +19,65 @@ function fixture() {
   return { entries, calls, scopes, store, fetcher, manager: new ServiceSessionManager(store, fetcher, null, false, scope => scopes.push(scope)) };
 }
 
+function interrupted(options) {
+  return new Promise((_, reject) => options.signal.addEventListener('abort', () =>
+    reject(Object.assign(new Error('Aborted'), { name: 'AbortError' })), { once: true }));
+}
+
+test('readiness can finish after the ordinary request deadline without sending credentials', async () => {
+  const f = fixture();
+  let calls = 0;
+  const manager = new ServiceSessionManager(f.store, async (url, options) => {
+    calls++;
+    assert.equal(options.body, undefined);
+    assert.equal(options.headers.Authorization, undefined);
+    await new Promise(resolve => setTimeout(resolve, 20));
+    assert.equal(options.signal.aborted, false);
+    return new Response(JSON.stringify(healthy));
+  }, null, false, () => {}, { request: 5, probe: 100 });
+  assert.equal(await manager.probe(base), base);
+  assert.equal(calls, 1);
+  assert.equal(f.entries.size, 0);
+});
+
+test('readiness deadline maps native abort to a useful timeout and preserves stored data', async () => {
+  const f = fixture();
+  f.entries.set('existing-round', 'keep');
+  const manager = new ServiceSessionManager(f.store, async (_, options) => interrupted(options), null,
+    false, () => {}, { request: 5, probe: 5 });
+  await assert.rejects(manager.probe(base), e => e.status === 408 && /timed out/.test(e.message) && !/aborted/i.test(e.message));
+  assert.equal(f.entries.get('existing-round'), 'keep');
+  assert.equal(manager.session, null);
+});
+
+test('readiness deadline also covers a response body that stops arriving', async () => {
+  const f = fixture();
+  const manager = new ServiceSessionManager(f.store, async (_, options) => ({ ok: true, status: 200,
+    text: () => interrupted(options) }), null, false, () => {}, { request: 5, probe: 5 });
+  await assert.rejects(manager.probe(base), e => e.status === 408);
+});
+
+test('network failures use connection guidance without exposing raw diagnostics', async () => {
+  const f = fixture();
+  const manager = new ServiceSessionManager(f.store, async () => { throw new TypeError('private transport diagnostic'); }, null);
+  await assert.rejects(manager.probe(base), e => e.status === 0 && /Wi-Fi or mobile data/.test(e.message) && !/private transport/.test(e.message));
+});
+
+test('a timed-out sign-in is not retried and cannot save a session', async () => {
+  const f = fixture();
+  let posts = 0;
+  const manager = new ServiceSessionManager(f.store, async (url, options) => {
+    if (url.endsWith('/health')) return new Response(JSON.stringify(healthy));
+    posts++;
+    return interrupted(options);
+  }, null, false, () => {}, { request: 5, probe: 100 });
+  await assert.rejects(manager.signIn(base, 'golfer@example.test', 'synthetic-private-password'), e =>
+    e.status === 408 && !e.message.includes('synthetic-private-password'));
+  assert.equal(posts, 1);
+  assert.equal(f.entries.has(SERVICE_SESSION_KEY), false);
+  assert.equal(manager.session, null);
+});
+
 test('connection check validates service identity and sends no token or password', async () => {
   const f = fixture();
   assert.equal(await f.manager.probe(base), base);

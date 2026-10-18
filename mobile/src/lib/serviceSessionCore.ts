@@ -14,7 +14,8 @@ export class ServiceSessionManager {
   session: ServiceSession | null = null;
   private restored: Promise<void> | null = null;
   constructor(private store: Store, private fetcher: typeof fetch, public defaultBase: string | null,
-              private localHttp = false, private applyScope: (scope: string) => void = () => {}) {}
+              private localHttp = false, private applyScope: (scope: string) => void = () => {},
+              private deadlines = { request: 15000, probe: 60000 }) {}
   get apiBase() { return this.session?.apiBase || this.defaultBase; }
   get scope() { return this.session ? (this.session.token ? accountScope(this.session.apiBase, this.session.user.id) : "sg_signed_out:") : ""; }
   get token() {
@@ -38,9 +39,10 @@ export class ServiceSessionManager {
     this.session = { ...saved, apiBase: base };
     this.applyScope(this.scope);
   }
-  private async request(base: string, path: string, init: RequestInit = {}) {
+  private async request(base: string, path: string, init: RequestInit = {}, deadlineMs = this.deadlines.request) {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 15000);
+    let timedOut = false;
+    const timeout = setTimeout(() => { timedOut = true; controller.abort(); }, deadlineMs);
     try {
       const response = await this.fetcher(base + path, { ...init, redirect: "error", signal: controller.signal,
         headers: { Accept: "application/json", ...init.headers } });
@@ -50,12 +52,18 @@ export class ServiceSessionManager {
       if (!response.ok) throw new ServiceError(response.status === 401 ? "Email or password is incorrect, or the session expired." :
         response.status === 429 ? "Too many sign-in attempts. Try again later." : "Golf service is unavailable. Check its deployment and database.", response.status);
       return data;
+    } catch (error) {
+      if (error instanceof ServiceError) throw error;
+      if (timedOut) throw new ServiceError("Connection timed out. The service may be waking up or your connection may be weak. Check Wi-Fi or mobile data, then try again.", 408);
+      throw new ServiceError("Could not reach the golf service. Check the API address and your Wi-Fi or mobile data, then try again.");
     } finally { clearTimeout(timeout); }
   }
   async probe(raw: string) {
     const base = resolveApiBase(raw, undefined, this.localHttp);
     if (!base) throw new ServiceError("Enter the complete golf API address.");
-    const result = await this.request(base, "/health");
+    // An anonymous readiness check can include a hosting cold start. Credentials
+    // are sent only after this succeeds; sign-in requests are never auto-retried.
+    const result = await this.request(base, "/health", {}, this.deadlines.probe);
     if (result?.service !== "smart-golf-gps" || result.apiVersion !== "1" || result.authentication !== "bearer" ||
         result.databaseReady !== true || result.status !== "ok") throw new ServiceError("This service does not support this app's authenticated golf API.");
     return base;

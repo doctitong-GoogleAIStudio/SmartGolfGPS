@@ -23,8 +23,8 @@ export default function Account() {
       <TextInput accessibilityLabel="Golf API address" testID="account-api-url" value={base} onChangeText={setBase} autoCapitalize="none" autoCorrect={false}
         keyboardType="url" placeholder="https://your-golf-service.example/api" editable={!connected && !busy} style={styles.input} />
       <Pressable disabled={busy || !base} accessibilityRole="button" style={[styles.secondary, busy && styles.disabled]}
-        onPress={() => run(async () => { await serviceSession.probe(base);setMessage("Golf API and database are ready. You can sign in."); })} testID="account-test-connection">
-        <Text style={styles.secondaryText}>TEST CONNECTION</Text></Pressable>
+        onPress={() => run(async () => { setMessage("Checking the golf service. The first connection may take up to a minute.");await serviceSession.probe(base);setMessage("Golf API and database are ready. You can sign in."); })} testID="account-test-connection">
+        <Text style={styles.secondaryText}>{busy ? "CONNECTING…" : "TEST CONNECTION"}</Text></Pressable>
       {!connected && <>
         <Text style={styles.label}>Email</Text>
         <TextInput accessibilityLabel="Email" testID="account-email" autoComplete="email" keyboardType="email-address" value={email} onChangeText={setEmail}
