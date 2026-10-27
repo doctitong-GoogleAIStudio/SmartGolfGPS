@@ -357,6 +357,45 @@ async def courses_directory():
     return PH_COURSES
 
 
+class SaveDirectoryCourse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    name: str = Field(min_length=1, max_length=300)
+
+
+@api.get("/courses/saved")
+async def saved_courses(request: Request):
+    return await db.golf_saved_courses.find(ownership(request), {"_id": 0, "ownerId": 0}).to_list(200)
+
+
+@api.post("/courses/directory/save")
+async def save_directory_course(body: SaveDirectoryCourse, request: Request):
+    # A player can bookmark an existing catalog entry, never submit shared geometry.
+    entry = next((c for c in PH_COURSES if c["name"].casefold() == body.name.strip().casefold()), None)
+    if entry is None:
+        raise HTTPException(404, "Directory course not found")
+    course_id = "ph-" + hashlib.sha256(entry["name"].casefold().encode()).hexdigest()[:24]
+    course = Course(id=course_id, name=entry["name"], location=entry["location"],
+                    latitude=entry["latitude"], longitude=entry["longitude"], holeCount=entry["holeCount"],
+                    layoutSource="unmapped", holes=[Hole(holeNumber=i + 1) for i in range(entry["holeCount"])],
+                    directoryName=entry["name"], scorecardTemplate=True)
+    # Mongo's unique _id and setOnInsert make retries/concurrent saves idempotent.
+    # Never replace a catalog course an editor has already mapped.
+    from pymongo.errors import DuplicateKeyError
+    try:
+        await db.courses.update_one({"_id": "directory:" + course_id}, {"$setOnInsert": course.model_dump()}, upsert=True)
+    except DuplicateKeyError:
+        pass
+    owner = ownership(request)["ownerId"]
+    key = hashlib.sha256((owner + ":" + course_id).encode()).hexdigest()
+    try:
+        await db.golf_saved_courses.update_one({"_id": key}, {"$setOnInsert": {
+            "ownerId": owner, "courseId": course_id, "directoryName": entry["name"], "savedAt": now_iso(),
+        }}, upsert=True)
+    except DuplicateKeyError:
+        pass
+    return await db.courses.find_one({"_id": "directory:" + course_id}, {"_id": 0})
+
+
 @api.get("/courses/{course_id}")
 async def get_course(course_id: str):
     c = await db.courses.find_one({"id": course_id}, {"_id": 0})
@@ -823,6 +862,7 @@ async def caddie(payload: dict):
 async def delete_all_data(request: Request):
     await db.rounds.delete_many(ownership(request))
     await db.shots.delete_many(ownership(request))
+    await db.golf_saved_courses.delete_many(ownership(request))
     return {"ok": True}
 
 

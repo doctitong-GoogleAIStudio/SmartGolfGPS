@@ -635,7 +635,7 @@ export default function Rangefinder() {
             </Pressable>
             <View style={{ alignItems: "center", minWidth: 82 }}>
               <Text style={styles.holeNum} testID="rf-hole-label">HOLE {hole?.holeNumber}</Text>
-              <Text style={styles.holeMeta}>PAR {hole?.par}{hole?.handicap ? ` · HCP ${hole.handicap}` : ""}</Text>
+              <Text style={styles.holeMeta}>{course?.scorecardTemplate ? "TEMPLATE PAR" : "PAR"} {hole?.par}{hole?.handicap ? ` · HCP ${hole.handicap}` : ""}</Text>
             </View>
             <Pressable testID="rf-next-hole-btn" onPress={() => changeHole(1)} style={styles.holeArrow}>
               <Ionicons name="chevron-forward" size={18} color={colors.charcoal} />

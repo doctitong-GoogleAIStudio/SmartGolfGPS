@@ -34,6 +34,7 @@ export default function Courses() {
   const [loadError, setLoadError] = useState("");
   const [geocoding, setGeocoding] = useState(false);
   const canEdit = role === "editor" && !!serviceSession.token;
+  const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
   const [courses, setCourses] = useState<any[]>([]);
   const [showNew, setShowNew] = useState(false);
   const [form, setForm] = useState({ name: "", location: "", holeCount: 18 });
@@ -70,6 +71,9 @@ export default function Courses() {
   useFocusEffect(useCallback(() => {
     mountedRef.current = true;
     void refreshAccess();
+    cachedGet<any[]>("/courses/saved", "saved_courses").then(rows => {
+      if (mountedRef.current && Array.isArray(rows)) setSavedIds(new Set(rows.map(row => row.courseId)));
+    }).catch(() => {});
     load();
     if (offlineSupported) { listOfflineCourseIds().then((ids) => setOfflineIds(new Set(ids))).catch(() => {}); refreshUsage(); }
     return () => { mountedRef.current = false; };
@@ -265,6 +269,8 @@ export default function Courses() {
           <View key={c.id} style={styles.card} testID={`course-card-${c.id}`}>
             <Text style={[styles.cName, { fontFamily: font.headBold }]}>{c.name}</Text>
             <Text style={styles.cMeta}>{c.location} · {c.holeCount} holes {c.isDemo ? "· DEMO DATA" : ""}</Text>
+            {savedIds.has(c.id) && <Text style={styles.accountLink}>SAVED TO YOUR LIST</Text>}
+            {c.scorecardTemplate && <Text style={styles.notice}>Scorecard pars are placeholders. Verified hole maps are not available yet.</Text>}
             <MapBadge course={c} style={{ marginTop: 8 }} testID={`course-badge-${c.id}`} />
             <LayoutAccuracy course={c} style={{ marginTop: 6 }} testID={`course-accuracy-${c.id}`} />
             <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 12 }}>

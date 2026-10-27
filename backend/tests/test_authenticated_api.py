@@ -109,6 +109,71 @@ class AuthenticatedApiTests(unittest.IsolatedAsyncioTestCase):
             job.assert_awaited_once_with(["course"])
         self.assertEqual(await self.db.courses.find_one({"id": "course"}), before)
 
+    async def test_player_can_save_directory_course_and_start_owned_round_without_editor_access(self):
+        from ph_courses import PH_COURSES
+        entry = PH_COURSES[0]
+        result = await self.request("POST", "/courses/directory/save", json={"name": entry["name"]})
+        self.assertEqual(result.status_code, 200, result.text)
+        course = result.json()
+        self.assertEqual(course["name"], entry["name"])
+        self.assertEqual(course["latitude"], entry["latitude"])
+        self.assertEqual(course["layoutSource"], "unmapped")
+        self.assertTrue(course["scorecardTemplate"])
+        self.assertEqual(len(course["holes"]), entry["holeCount"])
+        self.assertTrue(all(h["tee"] is None and h["greenCenter"] is None and not h["polygons"] for h in course["holes"]))
+        saved = (await self.request("GET", "/courses/saved")).json()
+        self.assertEqual(saved[0]["courseId"], course["id"])
+        self.assertNotIn("ownerId", saved[0])
+        self.assertEqual((await self.request("GET", "/courses/saved", "b")).json(), [])
+        round_result = await self.request("POST", "/rounds", json={"courseId": course["id"], "holeCount": 9})
+        self.assertEqual(round_result.status_code, 200)
+        self.assertEqual(len(round_result.json()["scores"]), 9)
+        self.assertEqual((await self.request("POST", "/courses", json={"name": "Forbidden"})).status_code, 403)
+        self.assertEqual((await self.request("PUT", "/courses/" + course["id"], json=course)).status_code, 403)
+        self.assertEqual((await self.request("DELETE", "/courses/" + course["id"])).status_code, 403)
+
+    async def test_directory_save_rejects_geometry_owner_injection_and_unknown_entries(self):
+        from ph_courses import PH_COURSES
+        path = "/api/courses/directory/save"
+        self.assertEqual((await self.client.post(path, json={"name": PH_COURSES[0]["name"]})).status_code, 401)
+        for extra in ({"holes": []}, {"ownerId": "b"}, {"role": "editor"}, {"latitude": 1}):
+            response = await self.request("POST", "/courses/directory/save", json={"name": PH_COURSES[0]["name"], **extra})
+            self.assertEqual(response.status_code, 422)
+        self.assertEqual((await self.request("POST", "/courses/directory/save", json={"name": "Not in this directory"})).status_code, 404)
+        self.assertEqual(await self.db.golf_saved_courses.count_documents({}), 0)
+        self.assertEqual(await self.db.courses.count_documents({}), 1)
+
+    async def test_concurrent_saves_are_idempotent_and_preserve_editor_geometry_and_legacy_data(self):
+        from ph_courses import PH_COURSES
+        import asyncio
+        body = {"name": PH_COURSES[0]["name"]}
+        legacy = await self.db.courses.find_one({"id": "course"})
+        responses = await asyncio.gather(*(self.request("POST", "/courses/directory/save", "a" if i % 2 else "b", json=body) for i in range(8)))
+        self.assertTrue(all(r.status_code == 200 for r in responses))
+        ids = {r.json()["id"] for r in responses}
+        self.assertEqual(len(ids), 1)
+        cid = ids.pop()
+        self.assertEqual(await self.db.courses.count_documents({"id": cid}), 1)
+        self.assertEqual(await self.db.golf_saved_courses.count_documents({}), 2)
+        await self.db.courses.update_one({"id": cid}, {"$set": {"layoutSource": "mapped", "customMetadata": "preserve", "holes": [{"holeNumber": 1, "tee": {"lat": 1, "lng": 2}}]}})
+        before = await self.db.courses.find_one({"id": cid})
+        again = await self.request("POST", "/courses/directory/save", json=body)
+        self.assertEqual(again.status_code, 200)
+        self.assertEqual(await self.db.courses.find_one({"id": cid}), before)
+        self.assertEqual(await self.db.courses.find_one({"id": "course"}), legacy)
+
+    async def test_privacy_deletion_clears_only_own_saved_courses_and_preserves_shared_maps(self):
+        from ph_courses import PH_COURSES
+        for user in ("a", "b"):
+            await self.request("POST", "/courses/directory/save", user, json={"name": PH_COURSES[0]["name"]})
+        courses_before = await self.db.courses.find({}).to_list(200)
+        await self.request("DELETE", "/shots")
+        self.assertEqual(len((await self.request("GET", "/courses/saved")).json()), 1)
+        await self.request("DELETE", "/data/all")
+        self.assertEqual((await self.request("GET", "/courses/saved")).json(), [])
+        self.assertEqual(len((await self.request("GET", "/courses/saved", "b")).json()), 1)
+        self.assertEqual(await self.db.courses.find({}).to_list(200), courses_before)
+
     async def test_private_routes_require_authentication(self):
         for method, path in (("GET", "/courses"), ("GET", "/rounds"), ("GET", "/shots"), ("GET", "/stats"),
                              ("GET", "/bag"), ("GET", "/settings"), ("DELETE", "/data/all"), ("GET", "/tools/activation-generator")):

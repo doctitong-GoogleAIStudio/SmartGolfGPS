@@ -91,7 +91,7 @@ export default function CourseOverview() {
         </Pressable>
         <View style={styles.title}>
           <Text style={styles.courseName} numberOfLines={1}>{course?.name || "Course Overview"}</Text>
-          <Text style={styles.courseMeta}>{holes.length} HOLES · PAR {totals.par}{totals.meters ? ` · ${fmtDist(totals.meters, unit)} ${unitLabel(unit)}` : ""}</Text>
+          <Text style={styles.courseMeta}>{holes.length} HOLES · {course?.scorecardTemplate ? "PARS NOT VERIFIED" : `PAR ${totals.par}`}{totals.meters ? ` · ${fmtDist(totals.meters, unit)} ${unitLabel(unit)}` : ""}</Text>
           <MapBadge course={course} style={{ marginTop: 6 }} testID="overview-map-badge" />
           <LayoutAccuracy course={course} showWhy style={{ marginTop: 6 }} testID="overview-accuracy" />
         </View>

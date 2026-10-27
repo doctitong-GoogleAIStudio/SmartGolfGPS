@@ -17,6 +17,7 @@ import { serviceSession } from "@/src/lib/serviceSession";
 import { storage } from "@/src/utils/storage";
 
 const RECENT_KEY = "sg_recent_courses";
+const SAVED_KEY = "sg_saved_directory_courses_v1";
 
 type Entry = { name: string; location: string; region: string; latitude: number; longitude: number; holeCount: number };
 
@@ -56,7 +57,7 @@ export default function PhCourses() {
   const [list, setList] = useState<Entry[]>(bundledDirectory);
   const [loading, setLoading] = useState(false), [loadError, setLoadError] = useState("");
   const [query, setQuery] = useState("");
-  const [added, setAdded] = useState<Record<string, boolean>>({});
+  const [added, setAdded] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState<string | null>(null);
   const [sortMode, setSortMode] = useState<"region" | "nearest">("region");
   const [viewMode, setViewMode] = useState<"list" | "map">("list");
@@ -86,11 +87,19 @@ export default function PhCourses() {
   };
   useEffect(() => {
     void loadDirectory();
+    storage.getItem<string>(SAVED_KEY, "").then(raw => {
+      try { const saved = raw ? JSON.parse(raw) : {};if (saved && typeof saved === "object" && !Array.isArray(saved)) setAdded(saved); } catch { /* Retain old cache. */ }
+    }).catch(() => {});
+    if (serviceSession.token) api.get("/courses/saved").then(rows => {
+      if (!Array.isArray(rows)) return;
+      const saved = Object.fromEntries(rows.filter(r => typeof r.directoryName === "string" && typeof r.courseId === "string").map(r => [r.directoryName, r.courseId]));
+      setAdded(saved);void storage.setItem(SAVED_KEY, JSON.stringify(saved)).catch(() => {});
+    }).catch(() => {});
     storage.getItem<string>(RECENT_KEY, "").then((raw) => {
       let rr: Entry[] = [];
       try { const parsed = raw ? JSON.parse(raw) : [];if (Array.isArray(parsed)) rr = parsed.filter(c => c && typeof c.name === "string" && typeof c.region === "string"); } catch { /* Preserve malformed legacy storage. */ }
       setRecent(rr);
-      setAdded(Object.fromEntries(rr.map((c) => [c.name, true])));
+
     }).catch(() => {});
   }, []);
 
@@ -158,24 +167,25 @@ export default function PhCourses() {
     if (!serviceSession.token) { router.push("/account");return; }
     setBusy(c.name);
     try {
-      const created = await api.post("/courses", { name: c.name, location: c.location, latitude: c.latitude, longitude: c.longitude, holeCount: c.holeCount, holes: [] });
-      setAdded((a) => ({ ...a, [c.name]: true }));
+      const created = await api.post("/courses/directory/save", { name: c.name });
+      if (typeof created?.id !== "string") throw new Error("The saved course response was invalid. Refresh before trying again.");
+      setAdded((a) => { const next = { ...a, [c.name]: created.id };void storage.setItem(SAVED_KEY, JSON.stringify(next)).catch(() => {});return next; });
       setRecent((prev) => {
         const next = [c, ...prev.filter((r) => r.name !== c.name)].slice(0, 12);
-        storage.setItem(RECENT_KEY, JSON.stringify(next));
+        void storage.setItem(RECENT_KEY, JSON.stringify(next)).catch(() => {});
         return next;
       });
-      toast.success(`Added "${c.name}"`, "Confirm its location next.");
-      router.push(`/courses/${created.id}/locate`);
+      toast.success(`Saved "${c.name}"`, "Added to your course list. Verified hole maps are separate.");
+      router.replace("/courses");
     } catch (error) {
-      toast.error("Could not add course", error instanceof Error ? error.message : "Please try again.");
+      toast.error("Could not save course", error instanceof Error ? error.message : "Please try again.");
     }
     setBusy(null);
   };
 
   const Row = ({ c }: { c: Entry }) => {
     const id = c.name.replace(/[^a-z0-9]/gi, "-").toLowerCase();
-    const isAdded = added[c.name];
+    const isAdded = !!added[c.name];
     const distKm = userPos ? (haversineMeters(userPos, { lat: c.latitude, lng: c.longitude }) as number) : null;
     return (
       <View style={styles.card} testID={`ph-course-${id}`}>
@@ -194,7 +204,7 @@ export default function PhCourses() {
               {c.location}{distKm != null ? `  ·  ${fmtDistance(distKm)}` : ""}
             </Text>
           </View>
-          <Pressable testID={`ph-add-${id}`} disabled={isAdded || busy === c.name} onPress={() => addCourse(c)} style={[styles.addBtn, isAdded ? styles.addedBtn : null]}>
+          <Pressable testID={`ph-add-${id}`} disabled={isAdded || busy !== null} onPress={() => addCourse(c)} style={[styles.addBtn, isAdded ? styles.addedBtn : null]}>
             {busy === c.name ? (
               <ActivityIndicator size="small" color="#fff" />
             ) : (
@@ -278,7 +288,7 @@ export default function PhCourses() {
               </View>
               <Pressable
                 testID="ph-selected-add"
-                disabled={!!added[selected.name] || busy === selected.name}
+                disabled={!!added[selected.name] || busy !== null}
                 onPress={() => addCourse(selected)}
                 style={[styles.addBtn, added[selected.name] ? styles.addedBtn : null]}
               >

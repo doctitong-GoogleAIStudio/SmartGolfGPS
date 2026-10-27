@@ -154,6 +154,7 @@ async def create_indexes(db):
     await db.golf_api_tokens.create_index("tokenHash", unique=True)
     await db.golf_api_tokens.create_index("expiresAt", expireAfterSeconds=0)
     await db.golf_login_limits.create_index("expiresAt", expireAfterSeconds=0)
+    await db.golf_saved_courses.create_index([("ownerId", 1), ("courseId", 1)], unique=True)
     # Partial indexes leave unassigned legacy records untouched.
     for name in ("rounds", "shots", "bags", "settings"):
         await db[name].create_index([("ownerId", 1), ("id", 1)], unique=True,
