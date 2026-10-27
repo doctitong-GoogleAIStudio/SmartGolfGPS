@@ -11,7 +11,7 @@ import { MapBadge } from "@/src/components/MapBadge";
 import { LayoutAccuracy, accuracyLevel } from "@/src/components/LayoutAccuracy";
 import { toast } from "@/src/lib/toast";
 
-const ACC_FILTERS = ["all", "HIGH", "MEDIUM", "LOW"] as const;
+const ACC_FILTERS = ["all", "REVIEW DECLARED", "UNVERIFIED"] as const;
 
 export default function StartRound() {
   const router = useRouter();
@@ -50,7 +50,7 @@ export default function StartRound() {
     if (!courseId) { toast.error("Select a course"); return; }
     const c = courses.find((x) => x.id === courseId);
     const a = c && !c.isDemo ? accuracyLevel(c) : null;
-    if (a && a.level === 1) { setLowReminder(true); return; }  // LOW accuracy → nudge first
+    if (a && a.level === 1) { setLowReminder(true); return; }  // Unreviewed geometry cannot provide playing distances.
     await beginRound();
   };
 
@@ -80,14 +80,14 @@ export default function StartRound() {
               const on = accFilter === f;
               return (
                 <Pressable key={f} testID={`start-acc-filter-${f.toLowerCase()}`} onPress={() => setAccFilter(f)} style={[styles.accChip, on && styles.accChipOn]}>
-                  <Text style={[styles.accChipTxt, on && styles.accChipTxtOn]}>{f === "all" ? "ALL" : `${f} ACCURACY`}</Text>
+                  <Text style={[styles.accChipTxt, on && styles.accChipTxtOn]}>{f === "all" ? "ALL" : f}</Text>
                 </Pressable>
               );
             })}
           </ScrollView>
           <View style={{ gap: 8 }}>
             {visibleCourses.length === 0 && (
-              <Text style={styles.accEmpty} testID="start-acc-empty">No {accFilter.toLowerCase()}-accuracy courses yet. Map a course in the editor or confirm its location to raise its trust level.</Text>
+              <Text style={styles.accEmpty} testID="start-acc-empty">No courses match this mapping status. Review actual coordinates and document their source and license in the editor.</Text>
             )}
             {visibleCourses.map((c) => (
               <Pressable key={c.id} testID={`start-course-${c.id}`} onPress={() => setCourseId(c.id)} style={[styles.courseCard, courseId === c.id && styles.courseCardActive]}>
@@ -127,14 +127,14 @@ export default function StartRound() {
             <View style={styles.trustIcon}>
               <Ionicons name="location" size={22} color="#a16207" />
             </View>
-            <Text style={styles.trustTitle}>Confirm the location?</Text>
-            <Text style={styles.trustBody}>This course sits on an approximate pin, so on-course distances may be off. Confirming its location takes a few seconds and makes every yardage more accurate.</Text>
-            <Pressable style={styles.trustConfirm} testID="low-reminder-confirm-btn" onPress={() => { setLowReminder(false); if (courseId) router.push(`/courses/${courseId}/locate`); }}>
+            <Text style={styles.trustTitle}>Review course mapping</Text>
+            <Text style={styles.trustBody}>This course has no usable mapping review. A directory pin does not establish actual hole geometry. You can keep score, but playing distances need reviewed coordinates, source and license information.</Text>
+            <Pressable style={styles.trustConfirm} testID="low-reminder-confirm-btn" onPress={() => { setLowReminder(false); if (courseId) router.push(`/courses/${courseId}/edit`); }}>
               <Ionicons name="location" size={16} color="#fff" />
-              <Text style={styles.trustConfirmTxt}>CONFIRM LOCATION</Text>
+              <Text style={styles.trustConfirmTxt}>REVIEW MAPPING</Text>
             </Pressable>
             <Pressable style={styles.trustSkip} testID="low-reminder-start-anyway-btn" onPress={() => { setLowReminder(false); beginRound(); }}>
-              <Text style={styles.trustSkipTxt}>START ANYWAY</Text>
+              <Text style={styles.trustSkipTxt}>CONTINUE WITH SCORECARD</Text>
             </Pressable>
           </View>
         </View>

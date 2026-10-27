@@ -7,7 +7,7 @@ import { colors } from "@/src/theme";
 import { useSettings } from "@/src/context/SettingsContext";
 import { useLicense } from "@/src/context/LicenseContext";
 import { Overline, ScreenHeader, Toggle, Segment } from "@/src/components/ui";
-import { api } from "@/src/lib/api";
+import { api, API } from "@/src/lib/api";
 import { toast } from "@/src/lib/toast";
 
 function LinkRow({ label, icon, onPress, testID }: { label: string; icon: keyof typeof Ionicons.glyphMap; onPress: () => void; testID: string }) {
@@ -48,7 +48,9 @@ export default function More() {
         <LinkRow label="Courses & Course Editor" icon="location" onPress={() => router.push("/courses")} testID="more-courses-link" />
         <LinkRow label="Round History" icon="time" onPress={() => router.push("/history")} testID="more-history-link" />
         <LinkRow label="Statistics" icon="stats-chart" onPress={() => router.push("/stats")} testID="more-stats-link" />
+        <LinkRow label="Golf account & connection" icon="person-circle" onPress={() => router.push("/account")} testID="more-account-link" />
 
+        {!API && <View style={{ backgroundColor: "#fff", borderRadius: 12, padding: 14 }} testID="backend-pending"><Text style={{ fontWeight: "700" }}>Service connection pending</Text><Text>Saved information remains available. Online rounds need the owner to connect the golf service.</Text></View>}
         <Overline style={styles.sec}>DEVICE</Overline>
         <View style={styles.licBox}>
           <View style={{ flex: 1 }}>

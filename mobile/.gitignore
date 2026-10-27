@@ -38,3 +38,17 @@ yarn-error.*
 *.tsbuildinfo
 
 app-example
+
+# Local test/build intermediates
+.test-build/
+.phase1-export/
+.build-temp/
+.phase1-export.log
+owner-signing.properties
+android/
+ios/
+
+.native-build.log
+.native-final-build.log
+.native-connection-build.log
+.signing-guard-check.log

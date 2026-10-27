@@ -15,6 +15,7 @@ import { SettingsProvider } from "@/src/context/SettingsContext";
 import { LicenseProvider, useLicense } from "@/src/context/LicenseContext";
 import { ToastHost } from "@/src/components/ToastHost";
 import { ActivationView } from "@/src/components/ActivationView";
+import { ServiceProvider } from "@/src/context/ServiceContext";
 
 LogBox.ignoreAllLogs(true);
 SplashScreen.preventAutoHideAsync();
@@ -50,18 +51,19 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
-        <SettingsProvider>
+        <ServiceProvider><SettingsProvider>
           <LicenseProvider>
             <StatusBar style="dark" />
             <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: "#FDFDFD" } }}>
               <Stack.Screen name="index" />
               <Stack.Screen name="(tabs)" />
               <Stack.Screen name="activate" options={{ presentation: "modal" }} />
+              <Stack.Screen name="account" />
             </Stack>
             <LicenseGate />
             <ToastHost />
           </LicenseProvider>
-        </SettingsProvider>
+        </SettingsProvider></ServiceProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

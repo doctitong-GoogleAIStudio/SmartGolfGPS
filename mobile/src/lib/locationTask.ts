@@ -1,9 +1,19 @@
+import { BackgroundPathBuffer, type PathPoint } from "@/src/lib/pathBuffer";
+import { validPoint } from "@/src/lib/gpsQuality";
 import * as Location from "expo-location";
 import * as TaskManager from "expo-task-manager";
 import { Platform } from "react-native";
 import { storage } from "@/src/utils/storage";
+import { captureStorageKey } from "./storageScope";
+import { serviceSession } from "./serviceSession";
 
 export const BG_LOCATION_TASK = "sg-background-location";
+const buffers = new Map<string, BackgroundPathBuffer>();
+function backgroundBuffer() {
+  const key = captureStorageKey("sg_bg_path");
+  if (!buffers.has(key)) buffers.set(key, new BackgroundPathBuffer(storage, key));
+  return buffers.get(key)!;
+}
 
 // Background task MUST be defined at module scope (native only). It buffers
 // points into AsyncStorage; the Rangefinder flushes them to the backend on
@@ -14,12 +24,12 @@ if (Platform.OS !== "web") {
     const locs: Location.LocationObject[] = data.locations || [];
     if (!locs.length) return;
     try {
-      const raw = await storage.getItem<string>("sg_bg_path", "");
-      const buf: { lat: number; lng: number; t: number }[] = raw ? JSON.parse(raw) : [];
-      for (const l of locs) {
-        buf.push({ lat: l.coords.latitude, lng: l.coords.longitude, t: l.timestamp });
-      }
-      await storage.setItem("sg_bg_path", JSON.stringify(buf.slice(-500)));
+      await serviceSession.restore();
+      if (serviceSession.session && !serviceSession.token) return;
+      const buffer = backgroundBuffer();
+      const points: PathPoint[] = locs.filter((l) => Number.isFinite(l.timestamp) && l.timestamp <= Date.now() + 1000 && validPoint({ lat: l.coords.latitude, lng: l.coords.longitude }) && l.coords.accuracy != null && l.coords.accuracy > 0 && l.coords.accuracy <= 35)
+        .map((l) => ({ lat: l.coords.latitude, lng: l.coords.longitude, t: l.timestamp }));
+      if (points.length) await buffer.append(points);
     } catch {
       // silent
     }
@@ -55,13 +65,6 @@ export async function stopBackgroundTracking() {
   }
 }
 
-export async function drainBackgroundPath(): Promise<{ lat: number; lng: number; t: number }[]> {
-  const raw = await storage.getItem<string>("sg_bg_path", "");
-  if (!raw) return [];
-  await storage.removeItem("sg_bg_path");
-  try {
-    return JSON.parse(raw);
-  } catch {
-    return [];
-  }
-}
+// Compatibility name: peek only; remove an acknowledged batch after successful upload.
+export async function drainBackgroundPath(): Promise<PathPoint[]> { return backgroundBuffer().peek(); }
+export async function acknowledgeBackgroundPath(points: PathPoint[]): Promise<void> { return backgroundBuffer().acknowledge(points); }

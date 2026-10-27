@@ -12,27 +12,63 @@ from datetime import datetime, timezone
 from typing import List, Optional
 
 import httpx
-from fastapi import FastAPI, APIRouter, HTTPException
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, Request
 from fastapi.responses import StreamingResponse, FileResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from ph_courses import PH_COURSES
+from auth import router as auth_router, authenticate, editor, ownership, create_indexes, bootstrap_account
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
-mongo_url = os.environ['MONGO_URL']
-client = AsyncIOMotorClient(mongo_url)
-db = client[os.environ['DB_NAME']]
+mongo_url = os.environ.get('MONGO_URL')
+client = AsyncIOMotorClient(mongo_url, serverSelectionTimeoutMS=4000) if mongo_url and os.environ.get('DB_NAME') else None
+db = client[os.environ['DB_NAME']] if client is not None else None
 
 app = FastAPI()
-api = APIRouter(prefix="/api")
+app.state.golf_db = db
+api = APIRouter(prefix="/api", dependencies=[Depends(authenticate)])
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("golf")
 
 R_EARTH = 6371000.0
+
+
+@app.middleware("http")
+async def private_api_responses(request: Request, call_next):
+    response = await call_next(request)
+    if request.url.path.startswith("/api/"):
+        response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_error(request: Request, error: RequestValidationError):
+    # Do not echo passwords, tokens, GPS samples or other submitted values in errors.
+    return JSONResponse({"detail": [{"loc": item["loc"], "type": item["type"], "msg": item["msg"]}
+                                    for item in error.errors()]}, status_code=422)
+
+
+@app.get("/api/health")
+async def health():
+    from fastapi.responses import JSONResponse
+    ready = False
+    if db is not None:
+        try:
+            await db.command("ping")
+            ready = True
+        except Exception:
+            pass
+    return JSONResponse({"service": "smart-golf-gps", "apiVersion": "1", "status": "ok" if ready else "unavailable",
+                         "authentication": "bearer", "databaseReady": ready}, status_code=200 if ready else 503,
+                        headers={"Cache-Control": "no-store"})
 
 
 def uid():
@@ -48,6 +84,7 @@ def haversine(lat1, lon1, lat2, lon2):
     dphi = math.radians(lat2 - lat1)
     dlmb = math.radians(lon2 - lon1)
     a = math.sin(dphi / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dlmb / 2) ** 2
+    a = max(0, min(1, a))
     return R_EARTH * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
 
@@ -146,8 +183,16 @@ async def geocode_course(name: str, location: str, force: bool = False):
 
 # ---------- Models ----------
 class LatLng(BaseModel):
-    lat: float
-    lng: float
+    lat: float = Field(ge=-90, le=90, allow_inf_nan=False)
+    lng: float = Field(ge=-180, le=180, allow_inf_nan=False)
+
+
+class GpsPoint(LatLng):
+    t: float = Field(ge=0, allow_inf_nan=False)
+
+
+class TrackBody(BaseModel):
+    points: List[GpsPoint] = Field(default_factory=list, max_length=200)
 
 
 class Hazard(BaseModel):
@@ -166,6 +211,7 @@ class HolePolygon(BaseModel):
 
 
 class Hole(BaseModel):
+    model_config = ConfigDict(extra="allow")
     holeNumber: int
     par: int = 4
     handicap: Optional[int] = None
@@ -177,7 +223,16 @@ class Hole(BaseModel):
     polygons: List[HolePolygon] = []
 
 
+class MappingReview(BaseModel):
+    reviewer: str = Field(min_length=1, max_length=300)
+    source: str = Field(min_length=1, max_length=1000)
+    license: str = Field(min_length=1, max_length=1000)
+    reviewedAt: str
+
+
 class Course(BaseModel):
+    model_config = ConfigDict(extra="allow")
+    mappingReview: Optional[MappingReview] = None
     id: str = Field(default_factory=uid)
     name: str
     location: str = ""
@@ -221,6 +276,7 @@ class Settings(BaseModel):
     aiCaddie: bool = True
     tournamentMode: bool = False
     gpsTracking: bool = True
+    gpsMode: str = "high"
 
 
 class HoleScore(BaseModel):
@@ -261,10 +317,10 @@ class Shot(BaseModel):
     roundId: Optional[str] = None
     holeNumber: Optional[int] = None
     club: str = ""
-    startLat: float
-    startLng: float
-    endLat: float
-    endLng: float
+    startLat: float = Field(ge=-90, le=90, allow_inf_nan=False)
+    startLng: float = Field(ge=-180, le=180, allow_inf_nan=False)
+    endLat: float = Field(ge=-90, le=90, allow_inf_nan=False)
+    endLng: float = Field(ge=-180, le=180, allow_inf_nan=False)
     distanceMeters: float = 0
     targetDistanceMeters: Optional[float] = None
     playsLikeMeters: Optional[float] = None
@@ -281,36 +337,63 @@ async def list_courses():
     return [await _ensure_layout(c) for c in courses]
 
 
-@api.post("/courses")
+@api.post("/courses", dependencies=[Depends(editor)])
 async def create_course(course: Course):
     if not course.holes:
         n = course.holeCount
         dp, dh = default_pars(n), default_hcps(n)
         course.holes = [Hole(holeNumber=i + 1, par=dp[i], handicap=dh[i]) for i in range(n)]
-    # Auto-generate a simulated on-course layout (tees, greens, hazards + POIs)
-    # from the course pin so Course Navigation and every playing feature work
-    # everywhere, even before a mapper draws exact points in the editor.
-    if not any(h.tee for h in course.holes) and course.latitude is not None and course.longitude is not None:
-        geo = await geocode_course(course.name, course.location)
-        if geo:
-            course.latitude, course.longitude = geo
-            course.geocoded = True
-        holes, pois = build_layout(course.latitude, course.longitude, course.holeCount,
-                                   [h.par for h in course.holes], [h.handicap for h in course.holes])
-        course.holes = holes
-        course.layoutSource = "simulated"
-        course.clubhouse = pois["clubhouse"]
-        course.drivingRange = pois["drivingRange"]
-        course.practiceGreen = pois["practiceGreen"]
-        course.parking = pois["parking"]
+    # A course pin is a directory location, never playing geometry.
+    # Missing tees/greens/hazards stay missing until actually mapped.
+    if not any(h.tee for h in course.holes):
+        course.layoutSource = "unmapped"
     await db.courses.insert_one(course.model_dump())
     return course
 
 
-@api.get("/courses/directory")
+@app.get("/api/courses/directory")
 async def courses_directory():
     """Browsable catalog of major Philippine golf courses (for import)."""
     return PH_COURSES
+
+
+class SaveDirectoryCourse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    name: str = Field(min_length=1, max_length=300)
+
+
+@api.get("/courses/saved")
+async def saved_courses(request: Request):
+    return await db.golf_saved_courses.find(ownership(request), {"_id": 0, "ownerId": 0}).to_list(200)
+
+
+@api.post("/courses/directory/save")
+async def save_directory_course(body: SaveDirectoryCourse, request: Request):
+    # A player can bookmark an existing catalog entry, never submit shared geometry.
+    entry = next((c for c in PH_COURSES if c["name"].casefold() == body.name.strip().casefold()), None)
+    if entry is None:
+        raise HTTPException(404, "Directory course not found")
+    course_id = "ph-" + hashlib.sha256(entry["name"].casefold().encode()).hexdigest()[:24]
+    course = Course(id=course_id, name=entry["name"], location=entry["location"],
+                    latitude=entry["latitude"], longitude=entry["longitude"], holeCount=entry["holeCount"],
+                    layoutSource="unmapped", holes=[Hole(holeNumber=i + 1) for i in range(entry["holeCount"])],
+                    directoryName=entry["name"], scorecardTemplate=True)
+    # Mongo's unique _id and setOnInsert make retries/concurrent saves idempotent.
+    # Never replace a catalog course an editor has already mapped.
+    from pymongo.errors import DuplicateKeyError
+    try:
+        await db.courses.update_one({"_id": "directory:" + course_id}, {"$setOnInsert": course.model_dump()}, upsert=True)
+    except DuplicateKeyError:
+        pass
+    owner = ownership(request)["ownerId"]
+    key = hashlib.sha256((owner + ":" + course_id).encode()).hexdigest()
+    try:
+        await db.golf_saved_courses.update_one({"_id": key}, {"$setOnInsert": {
+            "ownerId": owner, "courseId": course_id, "directoryName": entry["name"], "savedAt": now_iso(),
+        }}, upsert=True)
+    except DuplicateKeyError:
+        pass
+    return await db.courses.find_one({"_id": "directory:" + course_id}, {"_id": 0})
 
 
 @api.get("/courses/{course_id}")
@@ -321,21 +404,21 @@ async def get_course(course_id: str):
     return await _ensure_layout(c)
 
 
-@api.put("/courses/{course_id}")
+@api.put("/courses/{course_id}", dependencies=[Depends(editor)])
 async def update_course(course_id: str, course: Course):
     course.id = course_id
-    # Saving through the editor means a human has refined this course.
-    course.layoutSource = "mapped"
+    # Editing alone does not establish surveyed/reviewed boundaries.
+    # The explicit mappingReview declaration is retained, never inferred.
     existing = await db.courses.find_one({"id": course_id}, {"_id": 0})
     if existing and not course.shareCode:
         course.shareCode = existing.get("shareCode")  # never lose an issued code on edit
-    res = await db.courses.replace_one({"id": course_id}, course.model_dump())
+    res = await db.courses.replace_one({"id": course_id}, {**(existing or {}), **course.model_dump()})
     if res.matched_count == 0:
         raise HTTPException(404, "Course not found")
     return course
 
 
-@api.delete("/courses/{course_id}")
+@api.delete("/courses/{course_id}", dependencies=[Depends(editor)])
 async def delete_course(course_id: str):
     await db.courses.delete_one({"id": course_id})
     return {"ok": True}
@@ -348,7 +431,7 @@ def _new_share_code():
     return "".join(random.choice(alphabet) for _ in range(6))
 
 
-@api.post("/courses/{course_id}/share")
+@api.post("/courses/{course_id}/share", dependencies=[Depends(editor)])
 async def share_course(course_id: str):
     c = await db.courses.find_one({"id": course_id}, {"_id": 0})
     if not c:
@@ -364,7 +447,7 @@ async def share_course(course_id: str):
     return {"shareCode": code}
 
 
-@api.post("/courses/import")
+@api.post("/courses/import", dependencies=[Depends(editor)])
 async def import_course(body: dict):
     code = (body.get("code") or "").strip().upper()
     if not code:
@@ -392,34 +475,16 @@ class RelocateBody(BaseModel):
 
 
 def _apply_layout(c: dict, lat: float, lng: float, geocoded: bool) -> dict:
-    """Regenerate a simulated layout + POIs anchored at (lat, lng), preserving pars/hcps."""
-    holes_src = c.get("holes") or []
-    n = c.get("holeCount") or len(holes_src) or 18
-    new_holes, pois = build_layout(lat, lng, n, [h.get("par") for h in holes_src], [h.get("handicap") for h in holes_src])
-    return {
-        "latitude": lat, "longitude": lng, "geocoded": geocoded, "layoutSource": "simulated",
-        "holes": [h.model_dump() for h in new_holes],
-        "clubhouse": pois["clubhouse"].model_dump(), "drivingRange": pois["drivingRange"].model_dump(),
-        "practiceGreen": pois["practiceGreen"].model_dump(), "parking": pois["parking"].model_dump(),
-    }
+    """Change a directory anchor only. Preserve every existing hole and POI."""
+    return {"latitude": lat, "longitude": lng, "geocoded": geocoded}
 
 
 async def _ensure_layout(c: dict) -> dict:
-    """Self-heal on access: any non-mapped course missing tee coords gets a simulated layout."""
-    if not c or c.get("layoutSource") == "mapped":
-        return c
-    holes = c.get("holes") or []
-    if any(h.get("tee") for h in holes):
-        return c
-    lat, lng = c.get("latitude"), c.get("longitude")
-    if lat is None or lng is None:
-        return c
-    upd = _apply_layout(c, lat, lng, bool(c.get("geocoded")))
-    await db.courses.update_one({"id": c["id"]}, {"$set": upd})
-    return {**c, **upd}
+    """Read-only compatibility wrapper. Never synthesize or write playing data."""
+    return c
 
 
-@api.post("/courses/{course_id}/relocate")
+@api.post("/courses/{course_id}/relocate", dependencies=[Depends(editor)])
 async def relocate_course(course_id: str, body: RelocateBody):
     c = await db.courses.find_one({"id": course_id}, {"_id": 0})
     if not c:
@@ -431,7 +496,7 @@ async def relocate_course(course_id: str, body: RelocateBody):
     return {**c, **upd}
 
 
-@api.post("/courses/geocode-all")
+@api.post("/courses/geocode-all", dependencies=[Depends(editor)])
 async def geocode_all():
     """Re-geocode all saved, non-mapped courses on demand (runs in the background)."""
     ids = [c["id"] async for c in db.courses.find({"id": {"$ne": "demo-apo-davao"}, "layoutSource": {"$ne": "mapped"}}, {"id": 1})]
@@ -471,7 +536,7 @@ async def _bulk_geocode(ids):
     logger.info("Bulk geocode complete: %d/%d snapped", snapped, len(ids))
 
 
-@api.get("/tools/activation-generator")
+@api.get("/tools/activation-generator", dependencies=[Depends(editor)])
 async def download_activation_generator():
     """Serve the standalone, fully-offline Activation Generator HTML as a download.
     Open it once online to save it, then it runs with no internet."""
@@ -496,121 +561,139 @@ def default_bag():
 
 
 @api.get("/bag")
-async def get_bag():
-    b = await db.bags.find_one({"id": "default"}, {"_id": 0})
+async def get_bag(request: Request):
+    b = await db.bags.find_one({"id": "default", **ownership(request)}, {"_id": 0, "ownerId": 0})
     if not b:
         b = default_bag().model_dump()
-        await db.bags.insert_one({**b})
+        # Read defaults without overwriting or claiming the unassigned legacy bag.
     b.pop("_id", None)
     return b
 
 
 @api.put("/bag")
-async def update_bag(bag: Bag):
+async def update_bag(bag: Bag, request: Request):
     bag.id = "default"
-    await db.bags.replace_one({"id": "default"}, bag.model_dump(), upsert=True)
+    await db.bags.replace_one({"id": "default", **ownership(request)}, {**bag.model_dump(), **ownership(request)}, upsert=True)
     return bag
 
 
 # ---------- Settings ----------
 @api.get("/settings")
-async def get_settings():
-    s = await db.settings.find_one({"id": "default"}, {"_id": 0})
+async def get_settings(request: Request):
+    s = await db.settings.find_one({"id": "default", **ownership(request)}, {"_id": 0, "ownerId": 0})
     if not s:
         s = Settings().model_dump()
-        await db.settings.insert_one({**s})
+        # Existing unassigned settings remain preserved for a deliberate migration.
     s.pop("_id", None)
     return s
 
 
 @api.put("/settings")
-async def update_settings(s: Settings):
+async def update_settings(s: Settings, request: Request):
     s.id = "default"
-    await db.settings.replace_one({"id": "default"}, s.model_dump(), upsert=True)
+    await db.settings.replace_one({"id": "default", **ownership(request)}, {**s.model_dump(), **ownership(request)}, upsert=True)
     return s
 
 
 # ---------- Rounds ----------
 @api.post("/rounds")
-async def create_round(rnd: Round):
+async def create_round(rnd: Round, request: Request):
     course = await db.courses.find_one({"id": rnd.courseId}, {"_id": 0})
+    if not course:
+        raise HTTPException(404, "Course not found")
     if course:
         rnd.courseName = course["name"]
         rnd.scores = [HoleScore(hole=h["holeNumber"], par=h.get("par", 4))
                       for h in course["holes"][:rnd.holeCount]]
-    await db.rounds.insert_one(rnd.model_dump())
+    from pymongo.errors import DuplicateKeyError
+    try:
+        await db.rounds.insert_one({**rnd.model_dump(), **ownership(request)})
+    except DuplicateKeyError:
+        raise HTTPException(409, "Round ID already exists; existing data was preserved")
     return rnd
 
 
 @api.get("/rounds")
-async def list_rounds(status: Optional[str] = None):
-    q = {"status": status} if status else {}
-    return await db.rounds.find(q, {"_id": 0}).sort("startedAt", -1).to_list(200)
+async def list_rounds(request: Request, status: Optional[str] = None):
+    q = {**ownership(request), **({"status": status} if status else {})}
+    return await db.rounds.find(q, {"_id": 0, "ownerId": 0}).sort("startedAt", -1).to_list(200)
 
 
 @api.get("/rounds/{round_id}")
-async def get_round(round_id: str):
-    r = await db.rounds.find_one({"id": round_id}, {"_id": 0})
+async def get_round(round_id: str, request: Request):
+    r = await db.rounds.find_one({"id": round_id, **ownership(request)}, {"_id": 0, "ownerId": 0})
     if not r:
         raise HTTPException(404, "Round not found")
     return r
 
 
 @api.put("/rounds/{round_id}")
-async def update_round(round_id: str, upd: RoundUpdate):
+async def update_round(round_id: str, upd: RoundUpdate, request: Request):
     fields = {k: v for k, v in upd.model_dump(exclude_none=True).items()}
     if upd.scores is not None:
         fields["scores"] = [s.model_dump() for s in upd.scores]
     if fields.get("status") == "completed" and "endedAt" not in fields:
         fields["endedAt"] = now_iso()
-    res = await db.rounds.update_one({"id": round_id}, {"$set": fields})
+    res = await db.rounds.update_one({"id": round_id, **ownership(request)}, {"$set": fields})
     if res.matched_count == 0:
         raise HTTPException(404, "Round not found")
-    return await db.rounds.find_one({"id": round_id}, {"_id": 0})
+    return await db.rounds.find_one({"id": round_id, **ownership(request)}, {"_id": 0, "ownerId": 0})
 
 
 @api.post("/rounds/{round_id}/track")
-async def track_round(round_id: str, body: dict):
-    points = body.get("points", [])
+async def track_round(round_id: str, body: TrackBody, request: Request):
+    if not await db.rounds.find_one({"id": round_id, **ownership(request)}):
+        raise HTTPException(404, "Round not found")
+    points = [p.model_dump() for p in body.points]
     if points:
-        await db.rounds.update_one({"id": round_id}, {"$push": {"gpsPath": {"$each": points[:200]}}})
+        res = await db.rounds.update_one({"id": round_id, **ownership(request)}, {"$push": {"gpsPath": {"$each": points}}})
+        if not res.matched_count:
+            raise HTTPException(404, "Round not found")
     return {"ok": True}
 
 
 @api.delete("/rounds/{round_id}")
-async def delete_round(round_id: str):
-    await db.rounds.delete_one({"id": round_id})
-    await db.shots.delete_many({"roundId": round_id})
+async def delete_round(round_id: str, request: Request):
+    result = await db.rounds.delete_one({"id": round_id, **ownership(request)})
+    if not result.deleted_count:
+        raise HTTPException(404, "Round not found")
+    await db.shots.delete_many({"roundId": round_id, **ownership(request)})
     return {"ok": True}
 
 
 # ---------- Shots ----------
 @api.post("/shots")
-async def create_shot(shot: Shot):
+async def create_shot(shot: Shot, request: Request):
+    if shot.roundId and not await db.rounds.find_one({"id": shot.roundId, **ownership(request)}):
+        raise HTTPException(404, "Round not found")
     shot.distanceMeters = round(haversine(shot.startLat, shot.startLng, shot.endLat, shot.endLng), 1)
-    await db.shots.insert_one(shot.model_dump())
+    from pymongo.errors import DuplicateKeyError
+    try:
+        await db.shots.insert_one({**shot.model_dump(), **ownership(request)})
+    except DuplicateKeyError:
+        raise HTTPException(409, "Shot ID already exists; existing data was preserved")
     return shot
 
 
 @api.get("/shots")
-async def list_shots(roundId: Optional[str] = None, club: Optional[str] = None):
-    q = {}
+async def list_shots(request: Request, roundId: Optional[str] = None, club: Optional[str] = None):
+    q = ownership(request)
     if roundId:
         q["roundId"] = roundId
     if club:
         q["club"] = club
-    return await db.shots.find(q, {"_id": 0}).sort("timestamp", -1).to_list(1000)
+    return await db.shots.find(q, {"_id": 0, "ownerId": 0}).sort("timestamp", -1).to_list(1000)
 
 
 @api.delete("/shots")
-async def clear_shots():
-    await db.shots.delete_many({})
+async def clear_shots(request: Request):
+    await db.shots.delete_many(ownership(request))
     return {"ok": True}
 
 
 @api.get("/club-stats")
-async def club_stats():
-    shots = await db.shots.find({}, {"_id": 0}).to_list(5000)
+async def club_stats(request: Request):
+    shots = await db.shots.find(ownership(request), {"_id": 0}).to_list(5000)
     by_club = {}
     for s in shots:
         if s.get("club"):
@@ -632,9 +715,9 @@ async def club_stats():
 
 # ---------- Stats ----------
 @api.get("/stats")
-async def stats():
-    rounds = await db.rounds.find({"status": "completed"}, {"_id": 0}).sort("startedAt", -1).to_list(500)
-    shots = await db.shots.find({}, {"_id": 0}).to_list(5000)
+async def stats(request: Request):
+    rounds = await db.rounds.find({"status": "completed", **ownership(request)}, {"_id": 0}).sort("startedAt", -1).to_list(500)
+    shots = await db.shots.find(ownership(request), {"_id": 0}).to_list(5000)
     summaries = []
     for r in rounds:
         played = [s for s in r["scores"] if s.get("score")]
@@ -741,8 +824,13 @@ async def weather(lat: float, lng: float):
 # ---------- AI Caddie ----------
 @api.post("/caddie")
 async def caddie(payload: dict):
-    from emergentintegrations.llm.chat import LlmChat, UserMessage, TextDelta, StreamDone
     key = os.environ.get("EMERGENT_LLM_KEY")
+    if not key:
+        raise HTTPException(503, "AI Caddie is not configured")
+    try:
+        from emergentintegrations.llm.chat import LlmChat, UserMessage, TextDelta, StreamDone
+    except ImportError:
+        raise HTTPException(503, "AI Caddie integration is unavailable")
     system = (
         "You are a professional golf caddie. You receive structured, pre-calculated data. "
         "NEVER invent, recalculate, or change any distance/elevation/wind values - use them exactly as given. "
@@ -771,9 +859,10 @@ async def caddie(payload: dict):
 
 # ---------- Privacy ----------
 @api.delete("/data/all")
-async def delete_all_data():
-    await db.rounds.delete_many({})
-    await db.shots.delete_many({})
+async def delete_all_data(request: Request):
+    await db.rounds.delete_many(ownership(request))
+    await db.shots.delete_many(ownership(request))
+    await db.golf_saved_courses.delete_many(ownership(request))
     return {"ok": True}
 
 
@@ -888,61 +977,31 @@ def build_layout(base_lat, base_lng, n, pars=None, hcps=None):
 
 @app.on_event("startup")
 async def seed():
-    await db.courses.replace_one({"id": "demo-apo-davao"}, build_demo_course().model_dump(), upsert=True)
-    logger.info("Seeded/updated demo course")
-    if not await db.bags.find_one({"id": "default"}):
-        await db.bags.insert_one(default_bag().model_dump())
-    if not await db.settings.find_one({"id": "default"}):
-        await db.settings.insert_one(Settings().model_dump())
+    if db is None:
+        logger.warning("Golf database not configured; readiness returns 503")
+        return
+    await create_indexes(db)
+    if await bootstrap_account(db, os.environ):
+        logger.info("Explicit fresh-database golf account bootstrap completed; remove bootstrap secrets after verification")
+    if os.environ.get("ENABLE_DEMO_COURSE_SEED") == "true" and not await db.courses.find_one({"id": "demo-apo-davao"}):
+        await db.courses.insert_one(build_demo_course().model_dump())
+        logger.info("Seeded explicitly enabled simulated demo")
     # Geocode + layout backfill runs in the background so startup isn't held open
     # for external Nominatim calls (rate-limited to <=1 req/sec).
-    asyncio.create_task(backfill_layouts())
+    # No automatic course geometry backfill or remote geocoding on startup.
 
 
 async def backfill_layouts():
-    """Give every non-demo course a geocoded, simulated layout + POIs if it hasn't
-    been hand-mapped. Snaps the anchor to the real course location via Nominatim.
-    Never touches a course a mapper has drawn (layoutSource == 'mapped' or has polygons)."""
-    try:
-        await db.geocode_cache.create_index("updated_at")
-        async for c in db.courses.find({"id": {"$ne": "demo-apo-davao"}}):
-            holes = c.get("holes") or []
-            if c.get("layoutSource") == "mapped" or any((h.get("polygons") or []) for h in holes):
-                if not c.get("layoutSource"):
-                    await db.courses.update_one({"id": c["id"]}, {"$set": {"layoutSource": "mapped"}})
-                continue
-            if c.get("geocoded"):
-                continue  # already snapped to its real location
-            lat, lng = c.get("latitude"), c.get("longitude")
-            if lat is None or lng is None:
-                continue
-            geo = await geocode_course(c.get("name", ""), c.get("location", ""))
-            anchor_lat, anchor_lng = geo if geo else (lat, lng)
-            n = c.get("holeCount") or len(holes) or 18
-            new_holes, pois = build_layout(anchor_lat, anchor_lng, n,
-                                           [h.get("par") for h in holes], [h.get("handicap") for h in holes])
-            await db.courses.update_one(
-                {"id": c["id"]},
-                {"$set": {
-                    "latitude": anchor_lat, "longitude": anchor_lng, "geocoded": bool(geo),
-                    "layoutSource": "simulated",
-                    "holes": [h.model_dump() for h in new_holes],
-                    "clubhouse": pois["clubhouse"].model_dump(),
-                    "drivingRange": pois["drivingRange"].model_dump(),
-                    "practiceGreen": pois["practiceGreen"].model_dump(),
-                    "parking": pois["parking"].model_dump(),
-                }},
-            )
-        logger.info("Backfilled geocoded simulated layouts for unmapped courses")
-    except Exception as e:
-        logger.warning("Layout backfill error: %s", e)
+    """Retained compatibility hook. Existing records are deliberately untouched."""
+    return
 
 
+app.include_router(auth_router)
 app.include_router(api)
 app.add_middleware(
     CORSMiddleware,
-    allow_credentials=True,
-    allow_origins=os.environ.get('CORS_ORIGINS', '*').split(','),
+    allow_credentials=False,
+    allow_origins=[s.strip() for s in os.environ.get('CORS_ORIGINS', '').split(',') if s.strip()],
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -950,4 +1009,5 @@ app.add_middleware(
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
-    client.close()
+    if client is not None:
+        client.close()

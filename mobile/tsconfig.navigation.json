@@ -1,0 +1,25 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "CommonJS",
+    "moduleResolution": "Node",
+    "strict": true,
+    "skipLibCheck": true,
+    "types": [
+      "node"
+    ],
+    "outDir": ".test-build",
+    "rootDir": "src/lib"
+  },
+  "include": [
+    "src/lib/geo.ts",
+    "src/lib/gpsQuality.ts",
+    "src/lib/navigation.ts",
+    "src/lib/backendConfig.ts",
+    "src/lib/imagery.ts",
+    "src/lib/pathBuffer.ts",
+    "src/lib/serviceSessionCore.ts",
+    "src/lib/storageScope.ts",
+    "src/lib/coursePresentation.ts"
+  ]
+}

@@ -1,16 +1,9 @@
 import { OfflineManager } from "@maplibre/maplibre-react-native";
+import { imageryStyle, imageryOfflineAllowed } from "./imagery";
 
-const ESRI_SAT =
-  "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
+const OFFLINE_STYLE = JSON.stringify(imageryStyle());
 
-// Offline packs need the style as a string; reuse the same keyless Esri raster.
-const OFFLINE_STYLE = JSON.stringify({
-  version: 8,
-  sources: { esri: { type: "raster", tiles: [ESRI_SAT], tileSize: 256, maxzoom: 19 } },
-  layers: [{ id: "esri", type: "raster", source: "esri" }],
-});
-
-export const offlineSupported = true;
+export const offlineSupported = imageryOfflineAllowed;
 
 export async function listOfflineCourseIds(): Promise<string[]> {
   try {
@@ -29,6 +22,7 @@ export async function downloadCourseTiles(
   bounds: [number, number, number, number],
   onProgress?: (pct: number) => void,
 ): Promise<void> {
+  if (!imageryOfflineAllowed) throw new Error("Offline imagery requires configured provider rights");
   await new Promise<void>((resolve, reject) => {
     OfflineManager.createPack(
       { mapStyle: OFFLINE_STYLE, bounds, minZoom: 12, maxZoom: 17, metadata: { courseId, name } },

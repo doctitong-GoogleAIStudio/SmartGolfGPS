@@ -1,0 +1,13 @@
+# Universal Android test APK 1.1.4
+
+One APK targets the project's four Android CPU architectures: armeabi-v7a (ARM32), arm64-v8a (ARM64), x86 and x86_64. Android chooses the matching native libraries during installation. Minimum Android version remains API 24 / Android 7.0; target is API 36. This is a universal APK, not a split-APK set or an AAB.
+
+The manifest explicitly supports small, normal, large and extra-large screens with density scaling. The main activity is resizeable, and location/GPS/network-location hardware is optional for installation, allowing tablets without a GPS receiver to install the scorecard and map application. Accurate rangefinding still requires an available location source that passes the existing quality checks. The existing portrait UI is retained; a separate landscape/tablet dashboard redesign is not included.
+
+Version 1.1.4/code 118 uses the existing isolated com.emergent.smartgolfgps.ix61xw.phase1 package and test signing certificate. Install over the previous test APK rather than uninstalling. Existing local data, account binding, device activation and public imagery configuration are preserved. It does not replace the original production-package installation and is not an owner-signed Play release.
+
+Reproducible build: set SMART_GOLF_TEST_BUILD=1, regenerate Android using Expo prebuild, and run gradlew.bat :app:assemblePhase1 -PreactNativeArchitectures=armeabi-v7a,arm64-v8a,x86,x86_64. The withAndroidDeviceSupport plugin preserves screen and optional-location manifest settings. The Android architecture property already defaults to all four ABIs; do not pass the old ARM64-only override for a universal build.
+
+Validation before build: 50 mobile tests and TypeScript passed. Expo manifest introspection confirmed all screen sizes, optional location features, the isolated application ID and resizeable activity. Final package validation must confirm the actual native libraries and required library sets for every ABI, manifest version/device support, signature, 16 KB ZIP alignment, retained imagery/timeout configuration, and matching certificate against 1.1.3. Physical phone/tablet layout, runtime, GPS and offline acceptance are not inferred from compilation.
+
+The existing licensed MapTiler online imagery and 60-second connection readiness check are retained. The imagery client key remains in ignored local configuration and the APK; no account password, database URI or signing private key belongs in a source archive. Imagery licensing and mapping review requirements remain unchanged. The API address is https://smartgolfgps-production-bxords.laravel.cloud/api .

@@ -12,9 +12,12 @@ import { useSettings } from "@/src/context/SettingsContext";
 import { DirectoryMap } from "@/src/components/DirectoryMap";
 import { ScreenHeader } from "@/src/components/ui";
 import { toast } from "@/src/lib/toast";
+import bundledDirectory from "@/src/lib/phDirectory.json";
+import { serviceSession } from "@/src/lib/serviceSession";
 import { storage } from "@/src/utils/storage";
 
 const RECENT_KEY = "sg_recent_courses";
+const SAVED_KEY = "sg_saved_directory_courses_v1";
 
 type Entry = { name: string; location: string; region: string; latitude: number; longitude: number; holeCount: number };
 
@@ -51,9 +54,10 @@ export default function PhCourses() {
   const insets = useSafeAreaInsets();
   const { settings } = useSettings();
   const imperial = settings.distanceUnit === "yd";
-  const [list, setList] = useState<Entry[]>([]);
+  const [list, setList] = useState<Entry[]>(bundledDirectory);
+  const [loading, setLoading] = useState(false), [loadError, setLoadError] = useState("");
   const [query, setQuery] = useState("");
-  const [added, setAdded] = useState<Record<string, boolean>>({});
+  const [added, setAdded] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState<string | null>(null);
   const [sortMode, setSortMode] = useState<"region" | "nearest">("region");
   const [viewMode, setViewMode] = useState<"list" | "map">("list");
@@ -72,13 +76,31 @@ export default function PhCourses() {
     return km < 1 ? `${Math.round(meters)} m` : `${km.toFixed(km < 10 ? 1 : 0)} km`;
   };
 
+  const loadDirectory = async () => {
+    setLoading(true);setLoadError("");
+    try {
+      const data = await api.get("/courses/directory");
+      if (!Array.isArray(data) || !data.length || !data.every((c) => typeof c.name === "string" && typeof c.region === "string" && typeof c.location === "string" && Number.isFinite(c.latitude) && Number.isFinite(c.longitude) && Number.isFinite(c.holeCount))) throw new Error("Invalid directory");
+      setList(data);
+    } catch { setLoadError("Showing the included directory. The online update is unavailable."); }
+    finally { setLoading(false); }
+  };
   useEffect(() => {
-    api.get("/courses/directory").then(setList).catch(() => toast.error("Could not load directory"));
+    void loadDirectory();
+    storage.getItem<string>(SAVED_KEY, "").then(raw => {
+      try { const saved = raw ? JSON.parse(raw) : {};if (saved && typeof saved === "object" && !Array.isArray(saved)) setAdded(saved); } catch { /* Retain old cache. */ }
+    }).catch(() => {});
+    if (serviceSession.token) api.get("/courses/saved").then(rows => {
+      if (!Array.isArray(rows)) return;
+      const saved = Object.fromEntries(rows.filter(r => typeof r.directoryName === "string" && typeof r.courseId === "string").map(r => [r.directoryName, r.courseId]));
+      setAdded(saved);void storage.setItem(SAVED_KEY, JSON.stringify(saved)).catch(() => {});
+    }).catch(() => {});
     storage.getItem<string>(RECENT_KEY, "").then((raw) => {
-      const rr: Entry[] = raw ? JSON.parse(raw) : [];
+      let rr: Entry[] = [];
+      try { const parsed = raw ? JSON.parse(raw) : [];if (Array.isArray(parsed)) rr = parsed.filter(c => c && typeof c.name === "string" && typeof c.region === "string"); } catch { /* Preserve malformed legacy storage. */ }
       setRecent(rr);
-      setAdded(Object.fromEntries(rr.map((c) => [c.name, true])));
-    });
+
+    }).catch(() => {});
   }, []);
 
   const getLocation = async () => {
@@ -142,26 +164,28 @@ export default function PhCourses() {
   }, [filtered, userPos]);
 
   const addCourse = async (c: Entry) => {
+    if (!serviceSession.token) { router.push("/account");return; }
     setBusy(c.name);
     try {
-      const created = await api.post("/courses", { name: c.name, location: c.location, latitude: c.latitude, longitude: c.longitude, holeCount: c.holeCount, holes: [] });
-      setAdded((a) => ({ ...a, [c.name]: true }));
+      const created = await api.post("/courses/directory/save", { name: c.name });
+      if (typeof created?.id !== "string") throw new Error("The saved course response was invalid. Refresh before trying again.");
+      setAdded((a) => { const next = { ...a, [c.name]: created.id };void storage.setItem(SAVED_KEY, JSON.stringify(next)).catch(() => {});return next; });
       setRecent((prev) => {
         const next = [c, ...prev.filter((r) => r.name !== c.name)].slice(0, 12);
-        storage.setItem(RECENT_KEY, JSON.stringify(next));
+        void storage.setItem(RECENT_KEY, JSON.stringify(next)).catch(() => {});
         return next;
       });
-      toast.success(`Added "${c.name}"`, "Confirm its location next.");
-      router.push(`/courses/${created.id}/locate`);
-    } catch {
-      toast.error("Could not add course");
+      toast.success(`Saved "${c.name}"`, "Added to your course list. Verified hole maps are separate.");
+      router.replace("/courses");
+    } catch (error) {
+      toast.error("Could not save course", error instanceof Error ? error.message : "Please try again.");
     }
     setBusy(null);
   };
 
   const Row = ({ c }: { c: Entry }) => {
     const id = c.name.replace(/[^a-z0-9]/gi, "-").toLowerCase();
-    const isAdded = added[c.name];
+    const isAdded = !!added[c.name];
     const distKm = userPos ? (haversineMeters(userPos, { lat: c.latitude, lng: c.longitude }) as number) : null;
     return (
       <View style={styles.card} testID={`ph-course-${id}`}>
@@ -180,7 +204,7 @@ export default function PhCourses() {
               {c.location}{distKm != null ? `  ·  ${fmtDistance(distKm)}` : ""}
             </Text>
           </View>
-          <Pressable testID={`ph-add-${id}`} disabled={isAdded || busy === c.name} onPress={() => addCourse(c)} style={[styles.addBtn, isAdded ? styles.addedBtn : null]}>
+          <Pressable testID={`ph-add-${id}`} disabled={isAdded || busy !== null} onPress={() => addCourse(c)} style={[styles.addBtn, isAdded ? styles.addedBtn : null]}>
             {busy === c.name ? (
               <ActivityIndicator size="small" color="#fff" />
             ) : (
@@ -195,17 +219,18 @@ export default function PhCourses() {
     );
   };
 
-  if (!list.length)
-    return (
-      <View style={styles.loading}>
-        <ActivityIndicator color={colors.green} />
-      </View>
-    );
-
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
       <View style={{ paddingTop: insets.top, backgroundColor: colors.charcoal }} />
       <ScreenHeader overline={`${list.length} COURSES`} title="Philippine Courses" onBack={() => router.back()} testID="ph-courses-screen" />
+      <View style={{ paddingHorizontal: 16, paddingTop: 10, gap: 8 }}>
+        <Text style={styles.note}>Directory pins are approximate. Verified hole maps are separate.</Text>
+        {!!loadError && <Text accessibilityLiveRegion="polite" testID="ph-directory-error" style={styles.note}>{loadError}</Text>}
+        <Pressable accessibilityRole="button" disabled={loading} testID="ph-directory-retry" onPress={loadDirectory}>
+          <Text style={{ color: colors.green, fontWeight: "700" }}>{loading ? "Updating directory…" : "Refresh directory"}</Text>
+        </Pressable>
+        {!serviceSession.token && <Pressable accessibilityRole="button" onPress={() => router.push("/account")}><Text style={{ color: colors.green, fontWeight: "700" }}>Sign in or create an account</Text></Pressable>}
+      </View>
       <View style={styles.searchWrap}>
         <Ionicons name="search" size={18} color={colors.zinc400} />
         <TextInput testID="ph-search-input" value={query} onChangeText={setQuery} placeholder="Search course, city or region" placeholderTextColor={colors.zinc400} style={styles.search} />
@@ -263,7 +288,7 @@ export default function PhCourses() {
               </View>
               <Pressable
                 testID="ph-selected-add"
-                disabled={!!added[selected.name] || busy === selected.name}
+                disabled={!!added[selected.name] || busy !== null}
                 onPress={() => addCourse(selected)}
                 style={[styles.addBtn, added[selected.name] ? styles.addedBtn : null]}
               >
@@ -305,7 +330,7 @@ export default function PhCourses() {
             </View>
           ))
         )}
-        <Text style={styles.note}>Locations are approximate pins. Added courses start with a par-72 layout — map each hole's tee & greens in the Course Editor or on-site with GPS.</Text>
+        <Text style={styles.note}>Locations are approximate directory pins. They do not include verified tees, greens, hazards or pars. An authorized editor must map each hole using permitted sources or on-site GPS.</Text>
       </ScrollView>
       )}
     </View>

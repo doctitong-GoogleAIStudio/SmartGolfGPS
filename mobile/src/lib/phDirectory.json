@@ -1,0 +1,786 @@
+[
+  {
+    "name": "Manila Golf & Country Club",
+    "location": "Makati, Metro Manila",
+    "region": "Metro Manila",
+    "latitude": 14.556,
+    "longitude": 121.017,
+    "holeCount": 18
+  },
+  {
+    "name": "Wack Wack Golf & Country Club",
+    "location": "Mandaluyong, Metro Manila",
+    "region": "Metro Manila",
+    "latitude": 14.588,
+    "longitude": 121.043,
+    "holeCount": 18
+  },
+  {
+    "name": "Club Intramuros Golf Course",
+    "location": "Manila, Metro Manila",
+    "region": "Metro Manila",
+    "latitude": 14.5905,
+    "longitude": 120.975,
+    "holeCount": 18
+  },
+  {
+    "name": "Villamor Golf Club",
+    "location": "Pasay, Metro Manila",
+    "region": "Metro Manila",
+    "latitude": 14.51,
+    "longitude": 121.02,
+    "holeCount": 18
+  },
+  {
+    "name": "Capitol Hills Golf & Country Club",
+    "location": "Quezon City, Metro Manila",
+    "region": "Metro Manila",
+    "latitude": 14.66,
+    "longitude": 121.07,
+    "holeCount": 18
+  },
+  {
+    "name": "Veterans Golf Course",
+    "location": "Quezon City, Metro Manila",
+    "region": "Metro Manila",
+    "latitude": 14.63,
+    "longitude": 121.048,
+    "holeCount": 18
+  },
+  {
+    "name": "Manila Southwoods Golf & Country Club",
+    "location": "Carmona, Cavite",
+    "region": "Cavite / Laguna",
+    "latitude": 14.31,
+    "longitude": 121.06,
+    "holeCount": 18
+  },
+  {
+    "name": "Eagle Ridge Golf & Country Club",
+    "location": "General Trias, Cavite",
+    "region": "Cavite / Laguna",
+    "latitude": 14.35,
+    "longitude": 120.9,
+    "holeCount": 18
+  },
+  {
+    "name": "Orchard Golf & Country Club",
+    "location": "Dasmariñas, Cavite",
+    "region": "Cavite / Laguna",
+    "latitude": 14.33,
+    "longitude": 120.95,
+    "holeCount": 18
+  },
+  {
+    "name": "Riviera Golf Club",
+    "location": "Silang, Cavite",
+    "region": "Cavite / Laguna",
+    "latitude": 14.22,
+    "longitude": 120.98,
+    "holeCount": 18
+  },
+  {
+    "name": "Southlinks Golf Club",
+    "location": "Bacoor, Cavite",
+    "region": "Cavite / Laguna",
+    "latitude": 14.42,
+    "longitude": 120.95,
+    "holeCount": 18
+  },
+  {
+    "name": "Sta. Elena Golf & Country Club",
+    "location": "Cabuyao, Laguna",
+    "region": "Cavite / Laguna",
+    "latitude": 14.27,
+    "longitude": 121.11,
+    "holeCount": 18
+  },
+  {
+    "name": "The Country Club",
+    "location": "Sta. Rosa, Laguna",
+    "region": "Cavite / Laguna",
+    "latitude": 14.27,
+    "longitude": 121.09,
+    "holeCount": 18
+  },
+  {
+    "name": "Canlubang Golf & Country Club",
+    "location": "Calamba, Laguna",
+    "region": "Cavite / Laguna",
+    "latitude": 14.2,
+    "longitude": 121.1,
+    "holeCount": 18
+  },
+  {
+    "name": "Valley Golf & Country Club",
+    "location": "Antipolo, Rizal",
+    "region": "Rizal",
+    "latitude": 14.586,
+    "longitude": 121.128,
+    "holeCount": 18
+  },
+  {
+    "name": "The Country Club at Tagaytay Highlands",
+    "location": "Tagaytay, Cavite",
+    "region": "Tagaytay",
+    "latitude": 14.14,
+    "longitude": 121.0,
+    "holeCount": 18
+  },
+  {
+    "name": "Tagaytay Midlands Golf Club",
+    "location": "Talisay, Batangas",
+    "region": "Tagaytay",
+    "latitude": 14.09,
+    "longitude": 121.01,
+    "holeCount": 18
+  },
+  {
+    "name": "Splendido Taal Golf Club",
+    "location": "Laurel, Batangas",
+    "region": "Tagaytay",
+    "latitude": 14.05,
+    "longitude": 120.97,
+    "holeCount": 18
+  },
+  {
+    "name": "Mount Malarayat Golf & Country Club",
+    "location": "Lipa, Batangas",
+    "region": "Batangas",
+    "latitude": 13.97,
+    "longitude": 121.18,
+    "holeCount": 18
+  },
+  {
+    "name": "Evercrest Golf Club",
+    "location": "Nasugbu, Batangas",
+    "region": "Batangas",
+    "latitude": 14.18,
+    "longitude": 120.72,
+    "holeCount": 18
+  },
+  {
+    "name": "Calatagan Golf Club",
+    "location": "Calatagan, Batangas",
+    "region": "Batangas",
+    "latitude": 13.83,
+    "longitude": 120.63,
+    "holeCount": 18
+  },
+  {
+    "name": "Mimosa Plus Golf Course",
+    "location": "Clark, Pampanga",
+    "region": "Central Luzon",
+    "latitude": 15.17,
+    "longitude": 120.53,
+    "holeCount": 18
+  },
+  {
+    "name": "Sun Valley Golf & Country Club",
+    "location": "Clark, Pampanga",
+    "region": "Central Luzon",
+    "latitude": 15.2,
+    "longitude": 120.55,
+    "holeCount": 18
+  },
+  {
+    "name": "Pradera Verde Golf & Country Club",
+    "location": "Lubao, Pampanga",
+    "region": "Central Luzon",
+    "latitude": 14.94,
+    "longitude": 120.6,
+    "holeCount": 18
+  },
+  {
+    "name": "Luisita Golf & Country Club",
+    "location": "Tarlac City, Tarlac",
+    "region": "Central Luzon",
+    "latitude": 15.42,
+    "longitude": 120.6,
+    "holeCount": 18
+  },
+  {
+    "name": "Subic Bay Golf & Country Club",
+    "location": "Subic Bay, Zambales",
+    "region": "Central Luzon",
+    "latitude": 14.8,
+    "longitude": 120.27,
+    "holeCount": 18
+  },
+  {
+    "name": "Anvaya Cove Beach & Nature Club",
+    "location": "Morong, Bataan",
+    "region": "Central Luzon",
+    "latitude": 14.72,
+    "longitude": 120.25,
+    "holeCount": 18
+  },
+  {
+    "name": "Pinewoods Golf & Country Club",
+    "location": "Baguio-La Trinidad, Benguet",
+    "region": "Northern Luzon",
+    "latitude": 16.46,
+    "longitude": 120.59,
+    "holeCount": 9
+  },
+  {
+    "name": "Camp John Hay Golf Club",
+    "location": "Baguio City, Benguet",
+    "region": "Northern Luzon",
+    "latitude": 16.41,
+    "longitude": 120.62,
+    "holeCount": 18
+  },
+  {
+    "name": "Baguio Country Club",
+    "location": "Baguio City, Benguet",
+    "region": "Northern Luzon",
+    "latitude": 16.4,
+    "longitude": 120.61,
+    "holeCount": 9
+  },
+  {
+    "name": "Fort Ilocandia Golf Course",
+    "location": "Laoag, Ilocos Norte",
+    "region": "Northern Luzon",
+    "latitude": 18.16,
+    "longitude": 120.55,
+    "holeCount": 18
+  },
+  {
+    "name": "Palm Grove Golf & Country Club",
+    "location": "San Fernando, La Union",
+    "region": "Northern Luzon",
+    "latitude": 16.61,
+    "longitude": 120.32,
+    "holeCount": 9
+  },
+  {
+    "name": "Haciendas de Naga Golf Club",
+    "location": "Naga City, Camarines Sur",
+    "region": "Bicol",
+    "latitude": 13.6,
+    "longitude": 123.24,
+    "holeCount": 18
+  },
+  {
+    "name": "Mayon Imperial Golf Course",
+    "location": "Legazpi, Albay",
+    "region": "Bicol",
+    "latitude": 13.22,
+    "longitude": 123.68,
+    "holeCount": 9
+  },
+  {
+    "name": "Cebu Country Club",
+    "location": "Cebu City, Cebu",
+    "region": "Visayas",
+    "latitude": 10.33,
+    "longitude": 123.9,
+    "holeCount": 18
+  },
+  {
+    "name": "Alta Vista Golf & Country Club",
+    "location": "Cebu City, Cebu",
+    "region": "Visayas",
+    "latitude": 10.28,
+    "longitude": 123.85,
+    "holeCount": 18
+  },
+  {
+    "name": "Club Filipino de Cebu (Danao)",
+    "location": "Danao City, Cebu",
+    "region": "Visayas",
+    "latitude": 10.52,
+    "longitude": 124.03,
+    "holeCount": 18
+  },
+  {
+    "name": "Mactan Island Golf Club",
+    "location": "Lapu-Lapu, Cebu",
+    "region": "Visayas",
+    "latitude": 10.31,
+    "longitude": 124.01,
+    "holeCount": 18
+  },
+  {
+    "name": "Bacolod Golf & Country Club",
+    "location": "Bacolod City, Negros Occidental",
+    "region": "Visayas",
+    "latitude": 10.6,
+    "longitude": 122.98,
+    "holeCount": 18
+  },
+  {
+    "name": "Iloilo Golf & Country Club",
+    "location": "Sta. Barbara, Iloilo",
+    "region": "Visayas",
+    "latitude": 10.82,
+    "longitude": 122.53,
+    "holeCount": 18
+  },
+  {
+    "name": "Fairways & Bluewater Boracay Golf Club",
+    "location": "Malay, Aklan",
+    "region": "Visayas",
+    "latitude": 11.98,
+    "longitude": 121.93,
+    "holeCount": 18
+  },
+  {
+    "name": "Bohol Golf & Country Club",
+    "location": "Tagbilaran, Bohol",
+    "region": "Visayas",
+    "latitude": 9.65,
+    "longitude": 123.85,
+    "holeCount": 9
+  },
+  {
+    "name": "Leyte Golf & Country Club",
+    "location": "Tacloban City, Leyte",
+    "region": "Visayas",
+    "latitude": 11.22,
+    "longitude": 125.02,
+    "holeCount": 18
+  },
+  {
+    "name": "Negros Occidental Golf & Country Club (Marapara)",
+    "location": "Bacolod City, Negros Occidental",
+    "region": "Visayas",
+    "latitude": 10.67,
+    "longitude": 122.96,
+    "holeCount": 18
+  },
+  {
+    "name": "Apo Golf & Country Club",
+    "location": "Davao City, Davao del Sur",
+    "region": "Mindanao",
+    "latitude": 7.052,
+    "longitude": 125.517,
+    "holeCount": 18
+  },
+  {
+    "name": "Rancho Palos Verdes Golf & Country Club",
+    "location": "Davao City, Davao del Sur",
+    "region": "Mindanao",
+    "latitude": 7.1,
+    "longitude": 125.63,
+    "holeCount": 18
+  },
+  {
+    "name": "South Pacific Golf & Leisure Estate",
+    "location": "Davao City, Davao del Sur",
+    "region": "Mindanao",
+    "latitude": 7.19,
+    "longitude": 125.45,
+    "holeCount": 18
+  },
+  {
+    "name": "Pueblo de Oro Golf & Country Club",
+    "location": "Cagayan de Oro, Misamis Oriental",
+    "region": "Mindanao",
+    "latitude": 8.48,
+    "longitude": 124.6,
+    "holeCount": 18
+  },
+  {
+    "name": "Del Monte Golf Club",
+    "location": "Manolo Fortich, Bukidnon",
+    "region": "Mindanao",
+    "latitude": 8.36,
+    "longitude": 124.87,
+    "holeCount": 18
+  },
+  {
+    "name": "Zamboanga Golf Club",
+    "location": "Zamboanga City",
+    "region": "Mindanao",
+    "latitude": 6.93,
+    "longitude": 122.06,
+    "holeCount": 18
+  },
+  {
+    "name": "Iligan Golf & Country Club",
+    "location": "Iligan City, Lanao del Norte",
+    "region": "Mindanao",
+    "latitude": 8.23,
+    "longitude": 124.24,
+    "holeCount": 18
+  },
+  {
+    "name": "KCC Golf Club",
+    "location": "General Santos City, South Cotabato",
+    "region": "Mindanao",
+    "latitude": 6.12,
+    "longitude": 125.17,
+    "holeCount": 18
+  },
+  {
+    "name": "Camp Evangelista Golf Course",
+    "location": "Cagayan de Oro, Misamis Oriental",
+    "region": "Mindanao",
+    "latitude": 8.49,
+    "longitude": 124.66,
+    "holeCount": 9
+  },
+  {
+    "name": "Palmas del Mar / Butuan Golf",
+    "location": "Butuan City, Agusan del Norte",
+    "region": "Mindanao",
+    "latitude": 8.95,
+    "longitude": 125.54,
+    "holeCount": 9
+  },
+  {
+    "name": "Camp Aguinaldo Golf Club",
+    "location": "Quezon City, Metro Manila",
+    "region": "Metro Manila",
+    "latitude": 14.61,
+    "longitude": 121.06,
+    "holeCount": 9
+  },
+  {
+    "name": "Navy Golf Club",
+    "location": "Taguig, Metro Manila",
+    "region": "Metro Manila",
+    "latitude": 14.52,
+    "longitude": 121.05,
+    "holeCount": 18
+  },
+  {
+    "name": "Forest Hills Golf & Country Club",
+    "location": "Antipolo, Rizal",
+    "region": "Rizal",
+    "latitude": 14.63,
+    "longitude": 121.16,
+    "holeCount": 18
+  },
+  {
+    "name": "Eastridge Golf Club",
+    "location": "Binangonan, Rizal",
+    "region": "Rizal",
+    "latitude": 14.5,
+    "longitude": 121.16,
+    "holeCount": 18
+  },
+  {
+    "name": "Puerto Azul Golf & Country Club",
+    "location": "Ternate, Cavite",
+    "region": "Cavite / Laguna",
+    "latitude": 14.28,
+    "longitude": 120.62,
+    "holeCount": 18
+  },
+  {
+    "name": "Sherwood Hills Golf Club",
+    "location": "Trece Martires, Cavite",
+    "region": "Cavite / Laguna",
+    "latitude": 14.28,
+    "longitude": 120.87,
+    "holeCount": 18
+  },
+  {
+    "name": "Punta Fuego Golf Club",
+    "location": "Nasugbu, Batangas",
+    "region": "Batangas",
+    "latitude": 14.1,
+    "longitude": 120.62,
+    "holeCount": 9
+  },
+  {
+    "name": "Korea Golf & Country Club",
+    "location": "Clark, Pampanga",
+    "region": "Central Luzon",
+    "latitude": 15.19,
+    "longitude": 120.52,
+    "holeCount": 18
+  },
+  {
+    "name": "Isabela Golf Club",
+    "location": "Cauayan, Isabela",
+    "region": "Northern Luzon",
+    "latitude": 16.93,
+    "longitude": 121.77,
+    "holeCount": 18
+  },
+  {
+    "name": "Palawan Golf & Country Club",
+    "location": "Puerto Princesa, Palawan",
+    "region": "Palawan",
+    "latitude": 9.8,
+    "longitude": 118.72,
+    "holeCount": 18
+  },
+  {
+    "name": "Pueblo de Panay Golf",
+    "location": "Roxas City, Capiz",
+    "region": "Visayas",
+    "latitude": 11.58,
+    "longitude": 122.75,
+    "holeCount": 18
+  },
+  {
+    "name": "Awang Golf Course",
+    "location": "Datu Odin Sinsuat, Maguindanao",
+    "region": "Mindanao",
+    "latitude": 7.16,
+    "longitude": 124.21,
+    "holeCount": 18
+  },
+  {
+    "name": "Malaybalay Golf Course",
+    "location": "Malaybalay, Bukidnon",
+    "region": "Mindanao",
+    "latitude": 8.15,
+    "longitude": 125.13,
+    "holeCount": 9
+  },
+  {
+    "name": "Dole Philippines Golf Club",
+    "location": "Polomolok, South Cotabato",
+    "region": "Mindanao",
+    "latitude": 6.22,
+    "longitude": 125.06,
+    "holeCount": 18
+  },
+  {
+    "name": "Bacolod Golf (Marapara Extension)",
+    "location": "Bacolod City, Negros Occidental",
+    "region": "Visayas",
+    "latitude": 10.68,
+    "longitude": 122.97,
+    "holeCount": 9
+  },
+  {
+    "name": "Beverly Place Golf Club",
+    "location": "San Mateo, Rizal",
+    "region": "Rizal",
+    "latitude": 14.69,
+    "longitude": 121.12,
+    "holeCount": 9
+  },
+  {
+    "name": "Riverbend Golf & Country Club",
+    "location": "Bacolor, Pampanga",
+    "region": "Central Luzon",
+    "latitude": 14.99,
+    "longitude": 120.64,
+    "holeCount": 18
+  },
+  {
+    "name": "Camp John Hay - Scout Barrio Nine",
+    "location": "Baguio City, Benguet",
+    "region": "Northern Luzon",
+    "latitude": 16.405,
+    "longitude": 120.615,
+    "holeCount": 9
+  },
+  {
+    "name": "The Palms Country Club",
+    "location": "Alabang, Muntinlupa",
+    "region": "Metro Manila",
+    "latitude": 14.42,
+    "longitude": 121.03,
+    "holeCount": 9
+  },
+  {
+    "name": "Alabang Country Club",
+    "location": "Muntinlupa, Metro Manila",
+    "region": "Metro Manila",
+    "latitude": 14.42,
+    "longitude": 121.02,
+    "holeCount": 9
+  },
+  {
+    "name": "Summit Point Golf & Country Club",
+    "location": "Lipa, Batangas",
+    "region": "Batangas",
+    "latitude": 13.95,
+    "longitude": 121.13,
+    "holeCount": 18
+  },
+  {
+    "name": "Caliraya Springs Golf Club",
+    "location": "Lumban, Laguna",
+    "region": "Cavite / Laguna",
+    "latitude": 14.28,
+    "longitude": 121.55,
+    "holeCount": 18
+  },
+  {
+    "name": "Clearwater (Sacobia) Golf Course",
+    "location": "Bamban, Tarlac",
+    "region": "Central Luzon",
+    "latitude": 15.24,
+    "longitude": 120.54,
+    "holeCount": 18
+  },
+  {
+    "name": "Fort Magsaysay Golf Course",
+    "location": "Palayan, Nueva Ecija",
+    "region": "Central Luzon",
+    "latitude": 15.54,
+    "longitude": 121.08,
+    "holeCount": 9
+  },
+  {
+    "name": "Kingsborough Golf Club",
+    "location": "Marilao, Bulacan",
+    "region": "Central Luzon",
+    "latitude": 14.76,
+    "longitude": 120.94,
+    "holeCount": 9
+  },
+  {
+    "name": "Cagayan Golf & Country Club",
+    "location": "Tuguegarao, Cagayan",
+    "region": "Northern Luzon",
+    "latitude": 17.61,
+    "longitude": 121.72,
+    "holeCount": 9
+  },
+  {
+    "name": "Negros Oriental Golf & Country Club",
+    "location": "Dumaguete, Negros Oriental",
+    "region": "Visayas",
+    "latitude": 9.31,
+    "longitude": 123.3,
+    "holeCount": 9
+  },
+  {
+    "name": "Camp Keithley Golf Course",
+    "location": "Marawi, Lanao del Sur",
+    "region": "Mindanao",
+    "latitude": 8.0,
+    "longitude": 124.3,
+    "holeCount": 9
+  },
+  {
+    "name": "Palo Alto Golf & Country Club",
+    "location": "Baras, Rizal",
+    "region": "Rizal",
+    "latitude": 14.53,
+    "longitude": 121.27,
+    "holeCount": 18
+  },
+  {
+    "name": "Timberland Highlands Golf Course",
+    "location": "San Mateo, Rizal",
+    "region": "Rizal",
+    "latitude": 14.72,
+    "longitude": 121.13,
+    "holeCount": 9
+  },
+  {
+    "name": "Ponderosa Golf & Country Club",
+    "location": "Tuba, Benguet",
+    "region": "Northern Luzon",
+    "latitude": 16.36,
+    "longitude": 120.6,
+    "holeCount": 9
+  },
+  {
+    "name": "Camp Panacan Golf Course",
+    "location": "Davao City, Davao del Sur",
+    "region": "Mindanao",
+    "latitude": 7.13,
+    "longitude": 125.65,
+    "holeCount": 9
+  },
+  {
+    "name": "Southwoods Ridge Golf Club",
+    "location": "Biñan, Laguna",
+    "region": "Cavite / Laguna",
+    "latitude": 14.32,
+    "longitude": 121.08,
+    "holeCount": 18
+  },
+  {
+    "name": "Royale Tagaytay Country Club",
+    "location": "Alfonso, Cavite",
+    "region": "Tagaytay",
+    "latitude": 14.13,
+    "longitude": 120.85,
+    "holeCount": 18
+  },
+  {
+    "name": "Aquamarine Golf Course",
+    "location": "Silang, Cavite",
+    "region": "Cavite / Laguna",
+    "latitude": 14.23,
+    "longitude": 120.97,
+    "holeCount": 9
+  },
+  {
+    "name": "Sacobia Golf Club",
+    "location": "Angeles, Pampanga",
+    "region": "Central Luzon",
+    "latitude": 15.18,
+    "longitude": 120.56,
+    "holeCount": 18
+  },
+  {
+    "name": "Nueva Ecija Golf & Country Club",
+    "location": "Cabanatuan, Nueva Ecija",
+    "region": "Central Luzon",
+    "latitude": 15.49,
+    "longitude": 120.97,
+    "holeCount": 9
+  },
+  {
+    "name": "Aguinaldo Highway Golf Range",
+    "location": "Dasmariñas, Cavite",
+    "region": "Cavite / Laguna",
+    "latitude": 14.32,
+    "longitude": 120.94,
+    "holeCount": 9
+  },
+  {
+    "name": "Vista del Mar Golf Course",
+    "location": "Talomo, Davao City",
+    "region": "Mindanao",
+    "latitude": 7.06,
+    "longitude": 125.56,
+    "holeCount": 18
+  },
+  {
+    "name": "Sarangani Highlands Golf Club",
+    "location": "Alabel, Sarangani",
+    "region": "Mindanao",
+    "latitude": 6.1,
+    "longitude": 125.29,
+    "holeCount": 9
+  },
+  {
+    "name": "Sirawai Golf Course",
+    "location": "Cotabato City, Maguindanao",
+    "region": "Mindanao",
+    "latitude": 7.22,
+    "longitude": 124.25,
+    "holeCount": 9
+  },
+  {
+    "name": "Bantayan Island Golf Course",
+    "location": "Bantayan, Cebu",
+    "region": "Visayas",
+    "latitude": 11.17,
+    "longitude": 123.72,
+    "holeCount": 9
+  },
+  {
+    "name": "Sta. Barbara (Iloilo) Executive Course",
+    "location": "Sta. Barbara, Iloilo",
+    "region": "Visayas",
+    "latitude": 10.83,
+    "longitude": 122.53,
+    "holeCount": 9
+  },
+  {
+    "name": "Vigan Golf Club",
+    "location": "Vigan, Ilocos Sur",
+    "region": "Northern Luzon",
+    "latitude": 17.57,
+    "longitude": 120.39,
+    "holeCount": 9
+  }
+]

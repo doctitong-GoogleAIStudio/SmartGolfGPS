@@ -1,3 +1,4 @@
+import { usableHole, reviewedCourse } from "@/src/lib/navigation";
 import React, { useEffect, useMemo, useState } from "react";
 import { View, Text, StyleSheet, Pressable, Modal } from "react-native";
 import { useRouter } from "expo-router";
@@ -36,7 +37,7 @@ export default function CourseOverview() {
     })();
   }, []);
 
-  const holes: any[] = course?.holes || [];
+  const holes: any[] = useMemo(() => (course?.holes || []).map((h: any) => usableHole(course, h) ? h : { ...h, tee: null, greenFront: null, greenCenter: null, greenBack: null, hazards: [], polygons: [] }), [course]);
   const totals = useMemo(() => {
     let par = 0, meters = 0;
     holes.forEach((h) => { par += h.par || 0; if (h.tee && h.greenCenter) meters += (haversineMeters(h.tee, h.greenCenter) as number) || 0; });
@@ -70,7 +71,7 @@ export default function CourseOverview() {
     course?.drivingRange && { key: "range", label: "Driving Range", pt: course.drivingRange, icon: "golf" },
     course?.practiceGreen && { key: "pgreen", label: "Practice Green", pt: course.practiceGreen, icon: "ellipse" },
     course?.parking && { key: "park", label: "Parking", pt: course.parking, icon: "car" },
-  ].filter(Boolean);
+  ].filter((p) => reviewedCourse(course) && p);
 
   const startRound = async () => {
     const a = await getActiveRound();
@@ -90,7 +91,7 @@ export default function CourseOverview() {
         </Pressable>
         <View style={styles.title}>
           <Text style={styles.courseName} numberOfLines={1}>{course?.name || "Course Overview"}</Text>
-          <Text style={styles.courseMeta}>{holes.length} HOLES · PAR {totals.par}{totals.meters ? ` · ${fmtDist(totals.meters, unit)} ${unitLabel(unit)}` : ""}</Text>
+          <Text style={styles.courseMeta}>{holes.length} HOLES · {course?.scorecardTemplate ? "PARS NOT VERIFIED" : `PAR ${totals.par}`}{totals.meters ? ` · ${fmtDist(totals.meters, unit)} ${unitLabel(unit)}` : ""}</Text>
           <MapBadge course={course} style={{ marginTop: 6 }} testID="overview-map-badge" />
           <LayoutAccuracy course={course} showWhy style={{ marginTop: 6 }} testID="overview-accuracy" />
         </View>

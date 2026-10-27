@@ -1,0 +1,20 @@
+# Course screen and geocoding diagnostics — 1.1.6 / code 120
+
+The owner reported “Could not start geocoding” while signed in on 1.1.5. The screenshot does not expose the HTTP status, so an exact production failure cause has not been confirmed. The native screen showed editor-only actions to all players and discarded specific errors. Its single non-wrapping action row could shrink Play to zero width. The map badge labeled every non-mapped course SIMULATED, including courses with no hole geometry.
+
+Changes:
+- Authenticated GET /api/auth/me exposes only id, name, email and the current server role. It never grants access or changes an account. Existing backend editor authorization stays enforced.
+- The course screen checks that role before offering New, Import, Edit, Share, location updates, delete, and bulk pin searches. Players retain browsing and Play. Permission-check failures and course-load errors are visible, with retry and an account link. No automatic privilege elevation occurs.
+- Geocoding requests show distinct sign-in, editor access, timeout and transport errors. Duplicate taps are disabled while the start request runs. The success message describes searches starting; an arbitrary delayed refresh no longer implies completion. This increment does not introduce durable job status or confirm real-provider geocoding success.
+- Course pins and empty scorecards are NOT MAPPED. Actual legacy synthetic geometry stays SIMULATED. Existing map geometry, source tags, review declarations and rounds are not rewritten or deleted. UNVERIFIED remains appropriate until a mapper provides the required source/license review and valid playing data.
+- Course-card action buttons wrap and Play has a minimum width. Main action buttons and badges can grow vertically for large fonts. Location confirmation text now correctly says only the directory pin changed.
+
+Verification: 56 mobile production-module tests, 25 isolated Mongo-mock backend HTTP tests, and full TypeScript passed. Tests verify current-role changes, private account access, secret-field exclusion and editor-only geocoding request dispatch without real geocoder calls or geometry writes. Native universal build and packaging validation are recorded with the delivered APK. Physical phone/tablet rendering remains owner acceptance; no real geocoding job was started against production by this work.
+
+The test APK retains the existing isolated package and test certificate, supports all four ABIs, and updates the earlier test installs without uninstalling. No owner release-signing configuration is available. This fix does not supply verified course geometry. Geocoding a course name cannot supply verified fairways, tees, green boundaries or hazards.
+
+## Player directory saves
+
+A subsequent screenshot confirmed a 403 while Add called the editor-only shared-course creation endpoint. Add now calls authenticated POST /api/courses/directory/save with only an existing directory name. Arbitrary holes, coordinates, owner IDs and roles are rejected. The service uses a deterministic catalog record and setOnInsert, preserving any editor mapping and making retries/concurrent saves idempotent. Personal references are stored in golf_saved_courses with the authenticated owner and are listed only through that owner’s GET /api/courses/saved. Privacy deletion removes the owner’s references without deleting shared maps or other players’ lists. Deleting shot history preserves saved courses.
+
+Directory saving creates an explicitly unreviewed scorecard template with no tee, green, fairway or hazard geometry. Placeholder pars are identified in the course list, play header and overview. Add returns to the course list rather than sending a player to the editor-only location screen. Existing legacy course records and local recent-course history are retained. Shared-course creation, editing, relocation and deletion still require editor access. No test save or geocoding job was performed against the live production database.

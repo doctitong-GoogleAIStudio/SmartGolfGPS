@@ -1,16 +1,12 @@
+import { imageryStyle } from "@/src/lib/imagery";
+import { ImageryCredit } from "./ImageryCredit";
 import React, { useMemo, useRef } from "react";
 import { View, Text, StyleSheet } from "react-native";
 import { Map, Camera, Marker, GeoJSONSource, Layer, type CameraRef } from "@maplibre/maplibre-react-native";
 import { colors } from "@/src/theme";
 import { LatLng } from "@/src/lib/geo";
 
-const ESRI_SAT =
-  "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
-const MAP_STYLE: any = {
-  version: 8,
-  sources: { esri: { type: "raster", tiles: [ESRI_SAT], tileSize: 256, maxzoom: 19 } },
-  layers: [{ id: "esri", type: "raster", source: "esri" }],
-};
+const MAP_STYLE = imageryStyle();
 
 type Hole = { holeNumber: number; par: number; tee?: LatLng | null; greenCenter?: LatLng | null };
 type Poi = { key: string; label: string; pt: LatLng; icon?: string };
@@ -48,7 +44,8 @@ export function CourseOverviewMap({ holes, onHolePress, gpsPos, pois = [], focus
   }, [focusKey]);
 
   return (
-    <Map style={[StyleSheet.absoluteFill, style]} mapStyle={MAP_STYLE} compass={false} logo={false} attribution={false} onDidFinishLoadingMap={fit} testID="course-overview-map">
+    <View style={[StyleSheet.absoluteFill, style]}>
+    <Map style={StyleSheet.absoluteFill} mapStyle={MAP_STYLE} compass={false} logo={false} attribution={true} onDidFinishLoadingMap={fit} testID="course-overview-map">
       <Camera ref={cameraRef} initialViewState={{ center: pts[0] ? [pts[0].lng, pts[0].lat] : [122, 12.6], zoom: 14 }} />
 
       {route.length > 1 && (
@@ -99,6 +96,8 @@ export function CourseOverviewMap({ holes, onHolePress, gpsPos, pois = [], focus
         </Marker>
       )}
     </Map>
+    <ImageryCredit overlay />
+    </View>
   );
 }
 
