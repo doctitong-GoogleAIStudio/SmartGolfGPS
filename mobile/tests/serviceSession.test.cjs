@@ -186,3 +186,34 @@ test('queued legacy history stays unassigned after first account connection', as
   assert.notEqual(storageKey('sg_bg_path'), 'sg_bg_path');
   setStorageScope('');
 });
+
+ test('registration validates locally, probes anonymously and does not save a session', async () => {
+  const f = fixture();
+  await assert.rejects(f.manager.register(base, '', 'bad', 'short'));
+  assert.equal(f.calls.length, 0);
+  await f.manager.register(base, ' New golfer ', ' new@example.test ', 'synthetic-long-password');
+  assert.equal(f.calls.length, 2);
+  assert.equal(f.calls[1].url, base + '/auth/register');
+  assert.deepEqual(JSON.parse(f.calls[1].options.body), {name: 'New golfer', email: 'new@example.test', password: 'synthetic-long-password'});
+  assert.equal(f.calls[1].options.headers.Authorization, undefined);
+  assert.equal(f.entries.size, 0);
+  assert.equal(f.manager.session, null);
+ });
+ test('bound accounts cannot register and duplicate-email responses are actionable', async () => {
+  const f = fixture();
+  await f.manager.signIn(base, 'golfer@example.test', 'synthetic-long-password');
+  const before = f.calls.length;
+  await assert.rejects(f.manager.register(base, 'Other', 'other@example.test', 'synthetic-long-password'), /already linked/);
+  assert.equal(f.calls.length, before);
+  const manager = new ServiceSessionManager(fixture().store, async (url) => new Response(JSON.stringify(url.endsWith('/health') ? healthy : {}), {status: url.endsWith('/health') ? 200 : 409}), null);
+  await assert.rejects(manager.register(base, 'New', 'new@example.test', 'synthetic-long-password'), e => e.status === 409 && /Sign in instead/.test(e.message));
+ });
+ test('registration timeout is never retried or persisted', async () => {
+  const f = fixture();let posts = 0;
+  const manager = new ServiceSessionManager(f.store, async (url, options) => {
+    if (url.endsWith('/health')) return new Response(JSON.stringify(healthy));
+    posts++;return interrupted(options);
+  }, null, false, () => {}, {request: 5, probe: 100});
+  await assert.rejects(manager.register(base, 'New', 'new@example.test', 'synthetic-long-password'), e => e.status === 408);
+  assert.equal(posts, 1);assert.equal(f.entries.size, 0);
+ });

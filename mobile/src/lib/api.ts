@@ -18,10 +18,11 @@ async function req(method: string, path: string, body?: any) {
   await serviceSession.restore();
   refreshApiConnection();
   if (!API) throw new ServiceError("Connect the deployed golf API in Settings → Golf account.");
-  if (!serviceSession.token) throw new ServiceError("Sign in to the golf service in Settings → Golf account.", 401);
+  const publicDirectory = method === "GET" && path === "/courses/directory";
+  if (!publicDirectory && !serviceSession.token) throw new ServiceError("Sign in to the golf service in Settings → Golf account.", 401);
   const scope = storageScope();
   const abort = new AbortController();
-  const timeout = setTimeout(() => abort.abort(), 15000);
+  const timeout = setTimeout(() => abort.abort(), publicDirectory ? 60000 : 15000);
   let res: Response;
   try { res = await fetch(`${API}${path}`, {
     method,

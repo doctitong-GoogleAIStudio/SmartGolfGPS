@@ -11,6 +11,7 @@ export default function Account() {
   const [base, setBase] = useState(serviceSession.apiBase || "");
   const [email, setEmail] = useState(serviceSession.session?.user.email || "");
   const [password, setPassword] = useState(""), [busy, setBusy] = useState(false), [message, setMessage] = useState("");
+  const [creating, setCreating] = useState(false), [name, setName] = useState(""), [confirm, setConfirm] = useState("");
   const connected = !!serviceSession.token;
   const run = async (action: () => Promise<void>) => { setBusy(true);setMessage("");try { await action(); }
     catch (e) { setMessage(e instanceof Error ? e.message : "Could not connect. Please try again."); } finally { setBusy(false); } };
@@ -23,18 +24,31 @@ export default function Account() {
       <TextInput accessibilityLabel="Golf API address" testID="account-api-url" value={base} onChangeText={setBase} autoCapitalize="none" autoCorrect={false}
         keyboardType="url" placeholder="https://your-golf-service.example/api" editable={!connected && !busy} style={styles.input} />
       <Pressable disabled={busy || !base} accessibilityRole="button" style={[styles.secondary, busy && styles.disabled]}
-        onPress={() => run(async () => { setMessage("Checking the golf service. The first connection may take up to a minute.");await serviceSession.probe(base);setMessage("Golf API and database are ready. You can sign in."); })} testID="account-test-connection">
+        onPress={() => run(async () => { setMessage("Checking the golf service. The first connection may take up to a minute.");await serviceSession.probe(base);setMessage("Golf API and database are ready. You can sign in or create an account."); })} testID="account-test-connection">
         <Text style={styles.secondaryText}>{busy ? "CONNECTING…" : "TEST CONNECTION"}</Text></Pressable>
       {!connected && <>
+        <Pressable accessibilityRole="button" disabled={busy} style={styles.secondary} testID="account-toggle-sign-up"
+          onPress={() => { setCreating(!creating);setPassword("");setConfirm("");setMessage(""); }}>
+          <Text style={styles.secondaryText}>{creating ? "HAVE AN ACCOUNT? SIGN IN" : "NEW GOLFER? CREATE ACCOUNT"}</Text>
+        </Pressable>
+        {creating && <><Text style={styles.label}>Name</Text><TextInput accessibilityLabel="Name" testID="account-name" value={name} onChangeText={setName} editable={!busy} autoComplete="name" style={styles.input} /></>}
+
         <Text style={styles.label}>Email</Text>
         <TextInput accessibilityLabel="Email" testID="account-email" autoComplete="email" keyboardType="email-address" value={email} onChangeText={setEmail}
           autoCapitalize="none" autoCorrect={false} editable={!busy} style={styles.input} />
         <Text style={styles.label}>Password</Text>
-        <TextInput accessibilityLabel="Password" testID="account-password" secureTextEntry autoComplete="current-password" textContentType="password"
+        <TextInput accessibilityLabel="Password" testID="account-password" secureTextEntry autoComplete={creating ? "new-password" : "current-password"} textContentType={creating ? "newPassword" : "password"}
           value={password} onChangeText={setPassword} autoCapitalize="none" autoCorrect={false} editable={!busy} style={styles.input} />
+        {creating && <><Text style={styles.label}>Confirm password</Text><TextInput accessibilityLabel="Confirm password" testID="account-confirm-password" value={confirm} onChangeText={setConfirm} secureTextEntry autoCapitalize="none" autoCorrect={false} editable={!busy} style={styles.input} /></>}
         <Pressable accessibilityRole="button" disabled={busy || !base || !email || !password || Platform.OS === "web"} style={[styles.primary, (busy || !base || !email || !password) && styles.disabled]}
-          onPress={() => run(async () => { await signIn(base, email, password);setPassword("");router.replace("/(tabs)/more"); })} testID="account-sign-in"><Text style={styles.primaryText}>{busy ? "CONNECTING…" : "SIGN IN"}</Text></Pressable>
-        <Text style={styles.note}>Use the golf account created by your service administrator. Existing device activation remains separate. This installation keeps one account binding while account transfer and data migration are being completed.</Text>
+          onPress={() => run(async () => {
+            if (creating) {
+              if (password !== confirm) throw new Error("Passwords do not match.");
+              await serviceSession.register(base, name, email, password);
+              setPassword("");setConfirm("");setCreating(false);setMessage("Account created. Sign in with your email and password.");
+            } else { await signIn(base, email, password);setPassword("");router.replace("/(tabs)/more"); }
+          })} testID={creating ? "account-sign-up" : "account-sign-in"}><Text style={styles.primaryText}>{busy ? "CONNECTING…" : creating ? "CREATE ACCOUNT" : "SIGN IN"}</Text></Pressable>
+        <Text style={styles.note}>{creating ? "Use a password of 12–1024 characters. New accounts are players; course mapping requires editor access. If creation times out, try signing in before submitting again." : "Existing device activation remains separate. This installation keeps one account binding to preserve saved data."}</Text>
       </>}
       {connected && <Pressable accessibilityRole="button" disabled={busy} style={styles.secondary} testID="account-sign-out" onPress={() => Alert.alert("Sign out of golf service?", "Saved rounds remain on this device. Device activation is preserved.", [
         { text: "Cancel", style: "cancel" }, { text: "Sign out", onPress: () => run(async () => { const revoked = await signOut();

@@ -1,8 +1,9 @@
-"""Mobile bearer authentication. No public account creation or legacy data claiming."""
+"""Mobile bearer authentication. Player registration with no legacy data claiming."""
 import asyncio
 import hashlib
 import hmac
 import secrets
+import re
 import uuid
 from datetime import datetime, timedelta, timezone
 
@@ -10,6 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field
 from pymongo import ReturnDocument
+from pymongo.errors import DuplicateKeyError
 
 router = APIRouter(prefix="/api/auth")
 bearer = HTTPBearer(auto_error=False)
@@ -82,6 +84,33 @@ class Login(BaseModel):
     email: str = Field(min_length=3, max_length=320)
     password: str = Field(min_length=1, max_length=1024)
     deviceName: str = Field(min_length=1, max_length=120)
+
+
+class Registration(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    email: str = Field(min_length=3, max_length=320)
+    password: str = Field(min_length=12, max_length=1024)
+
+
+@router.post("/register", status_code=201)
+async def register(body: Registration, request: Request):
+    db = database(request)
+    address = request.client.host if request.client else "unknown"
+    await _limit(db, f"register-ip:{address}", 10)
+    email = body.email.strip().casefold()
+    name = body.name.strip()
+    if not name or not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", email):
+        raise HTTPException(422, "Enter a name and valid email address")
+    # Always player: never trust a submitted role or claim legacy records.
+    user = {"id": str(uuid.uuid4()), "email": email, "name": name, "role": "player",
+            "passwordHash": await asyncio.to_thread(password_hash, body.password),
+            "createdAt": datetime.now(timezone.utc)}
+    try:
+        await db.golf_users.insert_one(user)
+    except DuplicateKeyError:
+        raise HTTPException(409, "An account already uses this email. Sign in instead.") from None
+    # Registration does not issue a token. Sign-in is explicit, including after a timeout.
+    return {"ok": True}
 
 
 @router.post("/token")

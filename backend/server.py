@@ -351,7 +351,7 @@ async def create_course(course: Course):
     return course
 
 
-@api.get("/courses/directory")
+@app.get("/api/courses/directory")
 async def courses_directory():
     """Browsable catalog of major Philippine golf courses (for import)."""
     return PH_COURSES

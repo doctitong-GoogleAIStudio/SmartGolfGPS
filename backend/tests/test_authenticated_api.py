@@ -48,6 +48,44 @@ class AuthenticatedApiTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(r.status_code, 200, r.text)
         return r.json()
 
+    async def test_directory_is_public_without_exposing_private_courses(self):
+        result = await self.client.get("/api/courses/directory")
+        self.assertEqual(result.status_code, 200)
+        self.assertGreater(len(result.json()), 90)
+        self.assertTrue(all("holes" not in row for row in result.json()))
+        self.assertEqual((await self.client.get("/api/courses")).status_code, 401)
+
+    async def test_registration_creates_only_player_and_requires_explicit_login(self):
+        body = {"name": " New Golfer ", "email": " NEW@EXAMPLE.TEST ", "password": self.password, "role": "editor"}
+        result = await self.client.post("/api/auth/register", json=body)
+        self.assertEqual(result.status_code, 201, result.text)
+        self.assertNotIn("token", result.json())
+        row = await self.db.golf_users.find_one({"email": "new@example.test"})
+        self.assertEqual(row["name"], "New Golfer")
+        self.assertEqual(row["role"], "player")
+        self.assertTrue(password_matches(self.password, row["passwordHash"]))
+        self.assertNotIn(self.password, result.text)
+        self.assertEqual((await self.client.post("/api/auth/register", json=body)).status_code, 409)
+        login = await self.client.post("/api/auth/token", json={"email": body["email"], "password": self.password, "deviceName": "Test"})
+        self.assertEqual(login.status_code, 200)
+        headers = {"Authorization": "Bearer " + login.json()["token"]}
+        self.assertEqual((await self.client.post("/api/courses", json={"name": "Forbidden"}, headers=headers)).status_code, 403)
+        self.assertEqual((await self.client.get("/api/rounds", headers=headers)).json(), [])
+
+    async def test_registration_validation_redacts_input_and_limits_attempts(self):
+        for body in ({"name": " ", "email": "bad", "password": self.password},
+                     {"name": "Test", "email": "test@example.test", "password": "tiny-Pw7!"}):
+            response = await self.client.post("/api/auth/register", json=body)
+            self.assertEqual(response.status_code, 422)
+            self.assertNotIn(body["password"], response.text)
+        import auth
+        for _ in range(10):
+            await auth._limit(self.db, "register-ip:127.0.0.1", 100)
+        response = await self.client.post("/api/auth/register", json={"name": "Test", "email": "limited@example.test", "password": self.password})
+        self.assertEqual(response.status_code, 429)
+        self.assertIsNone(await self.db.golf_users.find_one({"email": "limited@example.test"}))
+
+
     async def test_private_routes_require_authentication(self):
         for method, path in (("GET", "/courses"), ("GET", "/rounds"), ("GET", "/shots"), ("GET", "/stats"),
                              ("GET", "/bag"), ("GET", "/settings"), ("DELETE", "/data/all"), ("GET", "/tools/activation-generator")):

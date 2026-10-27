@@ -50,7 +50,10 @@ export class ServiceSessionManager {
       let data: any;
       try { data = text ? JSON.parse(text) : null; } catch { throw new ServiceError("The address did not return a golf API response."); }
       if (!response.ok) throw new ServiceError(response.status === 401 ? "Email or password is incorrect, or the session expired." :
-        response.status === 429 ? "Too many sign-in attempts. Try again later." : "Golf service is unavailable. Check its deployment and database.", response.status);
+        response.status === 409 ? "An account already uses this email. Sign in instead." :
+        response.status === 422 ? "Check your name, email and password (12–1024 characters for sign-up)." :
+        response.status === 404 && path === "/auth/register" ? "Sign-up is not available on this service yet. Please try again after its update." :
+        response.status === 429 ? "Too many account attempts. Try again later." : "Golf service is unavailable. Check its deployment and database.", response.status);
       return data;
     } catch (error) {
       if (error instanceof ServiceError) throw error;
@@ -67,6 +70,16 @@ export class ServiceSessionManager {
     if (result?.service !== "smart-golf-gps" || result.apiVersion !== "1" || result.authentication !== "bearer" ||
         result.databaseReady !== true || result.status !== "ok") throw new ServiceError("This service does not support this app's authenticated golf API.");
     return base;
+  }
+  async register(raw: string, name: string, email: string, password: string) {
+    await this.restore();
+    if (this.session) throw new ServiceError("This installation is already linked to a golf account. Sign in with that account to preserve its data.");
+    if (!name.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()) || password.length < 12 || password.length > 1024) {
+      throw new ServiceError("Enter your name, a valid email, and a password of 12–1024 characters.");
+    }
+    const base = await this.probe(raw);
+    await this.request(base, "/auth/register", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: name.trim(), email: email.trim(), password }) });
   }
   async signIn(raw: string, email: string, password: string) {
     await this.restore();
