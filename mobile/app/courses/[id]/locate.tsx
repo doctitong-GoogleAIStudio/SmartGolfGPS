@@ -40,10 +40,10 @@ export default function LocateCourse() {
     try {
       await api.post(`/courses/${id}/relocate`, { latitude: pin.lat, longitude: pin.lng });
       await storage.setItem("sg_quick_course", String(id));
-      toast.success("Location confirmed", "Layout re-anchored to this spot.");
+      toast.success("Location confirmed", "Course pin updated. Hole geometry and review status are unchanged.");
       router.replace("/course-overview");
-    } catch {
-      toast.error("Could not update location");
+    } catch (error) {
+      toast.error("Could not update location", error instanceof Error ? error.message : "Please try again.");
       setSaving(false);
     }
   };

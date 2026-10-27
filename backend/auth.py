@@ -135,6 +135,13 @@ async def login(body: Login, request: Request):
             "user": {"id": user["id"], "name": user["name"], "email": user["email"]}}
 
 
+@router.get("/me")
+async def current_account(user=Depends(authenticate)):
+    # Read current server role; never disclose hashes, tokens or bootstrap settings.
+    return {"id": user["id"], "name": user["name"], "email": user["email"],
+            "role": "editor" if user.get("role") == "editor" else "player"}
+
+
 @router.delete("/token")
 async def logout(request: Request, user=Depends(authenticate)):
     await database(request).golf_api_tokens.delete_one({"tokenHash": request.state.golf_token_hash, "userId": user["id"]})

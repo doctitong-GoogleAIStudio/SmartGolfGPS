@@ -86,6 +86,29 @@ class AuthenticatedApiTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(await self.db.golf_users.find_one({"email": "limited@example.test"}))
 
 
+    async def test_current_account_reports_current_role_without_secrets(self):
+        self.assertEqual((await self.client.get("/api/auth/me")).status_code, 401)
+        for user, role in (("a", "player"), ("editor", "editor")):
+            result = await self.request("GET", "/auth/me", user)
+            self.assertEqual(result.status_code, 200)
+            self.assertEqual(result.json(), {"id": user, "name": user, "email": f"{user}@example.test", "role": role})
+            self.assertNotIn("passwordHash", result.text)
+        await self.db.golf_users.update_one({"id": "editor"}, {"$set": {"role": "player"}})
+        self.assertEqual((await self.request("GET", "/auth/me", "editor")).json()["role"], "player")
+        self.assertEqual((await self.request("POST", "/courses/geocode-all", "editor")).status_code, 403)
+
+    async def test_editor_can_start_pin_search_without_rewriting_hole_geometry(self):
+        from unittest.mock import AsyncMock
+        import asyncio
+        before = await self.db.courses.find_one({"id": "course"})
+        with patch.object(server, "_bulk_geocode", new_callable=AsyncMock) as job:
+            response = await self.request("POST", "/courses/geocode-all", "editor")
+            self.assertEqual(response.status_code, 200, response.text)
+            self.assertEqual(response.json()["courses"], 1)
+            await asyncio.sleep(0)
+            job.assert_awaited_once_with(["course"])
+        self.assertEqual(await self.db.courses.find_one({"id": "course"}), before)
+
     async def test_private_routes_require_authentication(self):
         for method, path in (("GET", "/courses"), ("GET", "/rounds"), ("GET", "/shots"), ("GET", "/stats"),
                              ("GET", "/bag"), ("GET", "/settings"), ("DELETE", "/data/all"), ("GET", "/tools/activation-generator")):

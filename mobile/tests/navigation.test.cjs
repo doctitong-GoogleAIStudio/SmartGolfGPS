@@ -68,3 +68,24 @@ test('full location buffer preserves existing data instead of truncating it',asy
 test('invalid hazard coordinates invalidate an otherwise reviewed hole',()=>{const c=course();c.holes[0].hazards=[{lat:NaN,lng:0}];assert.equal(usableHole(c,c.holes[0]),false);});
 test('imagery is disabled without source, attribution and rights configuration',()=>{const names=['EXPO_PUBLIC_IMAGERY_TILE_URL','EXPO_PUBLIC_IMAGERY_ATTRIBUTION','EXPO_PUBLIC_IMAGERY_LICENSE_REFERENCE','EXPO_PUBLIC_IMAGERY_OFFLINE_ALLOWED'];const saved=names.map(n=>process.env[n]);try{names.forEach(n=>delete process.env[n]);delete require.cache[require.resolve('../.test-build/imagery.js')];const m=require('../.test-build/imagery.js');assert.equal(m.imageryConfigured,false);assert.equal(m.imageryOfflineAllowed,false);assert.deepEqual(m.imageryStyle().sources,{});}finally{names.forEach((n,i)=>saved[i]===undefined?delete process.env[n]:process.env[n]=saved[i]);}});
 test('offline imagery needs explicit agreement in addition to a provider template',()=>{const names=['EXPO_PUBLIC_IMAGERY_TILE_URL','EXPO_PUBLIC_IMAGERY_ATTRIBUTION','EXPO_PUBLIC_IMAGERY_LICENSE_REFERENCE','EXPO_PUBLIC_IMAGERY_OFFLINE_ALLOWED'];const saved=names.map(n=>process.env[n]);try{process.env[names[0]]='https://tiles.example.test/{z}/{x}/{y}.jpg';process.env[names[1]]='Test provider';process.env[names[2]]='TEST LICENSE ONLY';process.env[names[3]]='false';delete require.cache[require.resolve('../.test-build/imagery.js')];const m=require('../.test-build/imagery.js');assert.equal(m.imageryConfigured,true);assert.equal(m.imageryOfflineAllowed,false);assert.equal(m.imageryStyle().sources.imagery.attribution,'Test provider');}finally{names.forEach((n,i)=>saved[i]===undefined?delete process.env[n]:process.env[n]=saved[i]);}});
+
+const { courseMapStatus, courseActionFailure } = require('../.test-build/coursePresentation');
+const { ServiceError } = require('../.test-build/serviceSessionCore');
+test('empty scorecards and course pins are not mislabeled as simulated geometry', () => {
+  for (const source of ['unmapped', 'simulated', 'mapped', undefined]) {
+    assert.equal(courseMapStatus({layoutSource: source, latitude: 14.5, longitude: 121, holes: [{holeNumber: 1, tee: null, greenCenter: null}]}), 'NOT MAPPED');
+  }
+});
+test('legacy simulated playing data retains its warning and is never marked reviewed', () => {
+  assert.equal(courseMapStatus({layoutSource: 'simulated', holes: [{tee: p(0, 0)}]}), 'SIMULATED');
+  assert.equal(courseMapStatus({layoutSource: 'mapped', holes: [{tee: p(0, 0)}]}), 'MAPPED');
+  assert.equal(courseMapStatus({holes: [{tee: p(0, 0)}]}), 'UNREVIEWED MAP');
+  assert.equal(courseMapStatus({isDemo: true, layoutSource: 'mapped', holes: [{tee: p(0, 0)}]}), 'SIMULATED');
+});
+test('course action failures distinguish expired sign-in, editor access and connection errors', () => {
+  assert.equal(courseActionFailure(new ServiceError('expired', 401)).account, true);
+  const denied = courseActionFailure(new ServiceError('forbidden', 403));
+  assert.equal(denied.title, 'Editor access required');assert.equal(denied.account, false);
+  assert.match(denied.detail, /Player accounts/);
+  assert.match(courseActionFailure(new ServiceError('Connection timed out.', 408)).detail, /timed out/);
+});

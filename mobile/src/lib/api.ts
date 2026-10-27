@@ -34,8 +34,12 @@ async function req(method: string, path: string, body?: any) {
     const text = await res.text();
     if (scope !== storageScope()) throw new ServiceError("The golf session changed. Please retry.", 409);
     if (!res.ok) throw new ServiceError(res.status === 401 ? "Your golf session expired. Sign in again." :
-      res.status === 403 ? "Your account is not authorized for this action." : `${method} ${path} → ${res.status}`, res.status);
+      res.status === 403 ? (path.startsWith("/courses") ? "Course changes require an authorized editor. Player accounts can browse and play available courses." : "Your account is not authorized for this action.") : `${method} ${path} → ${res.status}`, res.status);
     return text ? JSON.parse(text) : null;
+  } catch (error) {
+    if (error instanceof ServiceError) throw error;
+    if (abort.signal.aborted) throw new ServiceError("Connection timed out. Check your connection, then refresh before retrying; the service may have completed the request.", 408);
+    throw new ServiceError("Could not reach the golf service. Check Wi-Fi or mobile data and the golf API address.");
   } finally { clearTimeout(timeout); }
 }
 

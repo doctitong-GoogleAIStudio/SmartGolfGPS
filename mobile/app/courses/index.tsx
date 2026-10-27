@@ -6,6 +6,8 @@ import * as Location from "expo-location";
 import * as Clipboard from "expo-clipboard";
 import { Ionicons } from "@expo/vector-icons";
 import { colors, font } from "@/src/theme";
+import { serviceSession } from "@/src/lib/serviceSession";
+import { courseActionFailure } from "@/src/lib/coursePresentation";
 import { api, cachedGet } from "@/src/lib/api";
 import { storage } from "@/src/utils/storage";
 import { ScreenHeader } from "@/src/components/ui";
@@ -27,6 +29,11 @@ export default function Courses() {
 
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const [role, setRole] = useState<"editor" | "player" | null>(null);
+  const [checkingAccess, setCheckingAccess] = useState(false), [accessError, setAccessError] = useState("");
+  const [loadError, setLoadError] = useState("");
+  const [geocoding, setGeocoding] = useState(false);
+  const canEdit = role === "editor" && !!serviceSession.token;
   const [courses, setCourses] = useState<any[]>([]);
   const [showNew, setShowNew] = useState(false);
   const [form, setForm] = useState({ name: "", location: "", holeCount: 18 });
@@ -40,9 +47,29 @@ export default function Courses() {
 
   const refreshUsage = () => { if (offlineSupported) getOfflineUsage().then((u) => mountedRef.current && setUsage(u)).catch(() => {}); };
 
-  const load = () => cachedGet<any[]>("/courses", "courses").then(setCourses).catch(() => {});
+  const reportFailure = (error: unknown) => {
+    const failure = courseActionFailure(error);
+    Alert.alert(failure.title, failure.detail, failure.account ? [
+      { text: "Later", style: "cancel" }, { text: "Golf account", onPress: () => router.push("/account") },
+    ] : [{ text: "OK" }]);
+  };
+  const load = async () => {
+    setLoadError("");
+    try { const data = await cachedGet<any[]>("/courses", "courses");if (mountedRef.current) setCourses(data); }
+    catch (error) { if (mountedRef.current) setLoadError(courseActionFailure(error).detail); }
+  };
+  const refreshAccess = async () => {
+    setCheckingAccess(true);setAccessError("");setRole(null);
+    try {
+      if (!serviceSession.token) return;
+      const user = await api.get("/auth/me");
+      if (mountedRef.current) setRole(user.role === "editor" ? "editor" : "player");
+    } catch (error) { if (mountedRef.current) setAccessError(courseActionFailure(error).detail); }
+    finally { if (mountedRef.current) setCheckingAccess(false); }
+  };
   useFocusEffect(useCallback(() => {
     mountedRef.current = true;
+    void refreshAccess();
     load();
     if (offlineSupported) { listOfflineCourseIds().then((ids) => setOfflineIds(new Set(ids))).catch(() => {}); refreshUsage(); }
     return () => { mountedRef.current = false; };
@@ -126,8 +153,8 @@ export default function Courses() {
       const r = await api.post(`/courses/${id}/share`);
       await Clipboard.setStringAsync(r.shareCode);
       Alert.alert("Share Code", `Share this code with a friend so they can download this course:\n\n${r.shareCode}\n\n(Copied to clipboard)`, [{ text: "Done" }]);
-    } catch {
-      toast.error("Could not create share code");
+    } catch (error) {
+      reportFailure(error);
     }
   };
 
@@ -140,8 +167,8 @@ export default function Courses() {
       setImportCode("");
       load();
       toast.success(`Imported "${c.name}"`);
-    } catch {
-      toast.error("No course found for that code");
+    } catch (error) {
+      reportFailure(error);
     }
   };
 
@@ -155,28 +182,31 @@ export default function Courses() {
         lat = p.coords.latitude; lng = p.coords.longitude;
       }
     } catch {}
-    const r = await api.post("/courses", { ...form, latitude: lat, longitude: lng, holes: [] });
-    setShowNew(false);
-    toast.success("Course created — set tees & greens on the map");
-    router.push(`/courses/${r.id}/edit`);
+    try {
+      const r = await api.post("/courses", { ...form, latitude: lat, longitude: lng, holes: [] });
+      setShowNew(false);
+      toast.success("Course created — set tees & greens on the map");
+      router.push(`/courses/${r.id}/edit`);
+    } catch (error) { reportFailure(error); }
   };
 
   const regeocode = async () => {
+    if (geocoding) return;
+    if (!canEdit) { reportFailure(new Error("Sign in with an authorized editor account to update course locations.")); return; }
+    setGeocoding(true);
     try {
       const r = await api.post("/courses/geocode-all");
       const n = r.courses || 0;
-      if (!n) { toast.info("Nothing to geocode", "Your courses are already snapped or hand-mapped."); return; }
-      toast.info("Re-geocoding courses…", `Snapping ${n} course${n === 1 ? "" : "s"} in the background — cards refresh in a moment.`);
-      setTimeout(load, n * 2600 + 1500);
-    } catch {
-      toast.error("Could not start geocoding");
-    }
+      if (!n) { toast.info("No eligible course pins", "Hand-mapped courses are preserved."); return; }
+      Alert.alert("Course pin searches started", `Searching ${n} course location${n === 1 ? "" : "s"}. Refresh the list later to check updates. Geocoding does not map or verify tees, greens or hazards. Hand-mapped holes are preserved.`);
+    } catch (error) { reportFailure(error); }
+    finally { if (mountedRef.current) setGeocoding(false); }
   };
 
   const remove = (id: string) => {
     Alert.alert("Delete this course?", "", [
       { text: "Cancel", style: "cancel" },
-      { text: "Delete", style: "destructive", onPress: async () => { await api.del(`/courses/${id}`); load(); } },
+      { text: "Delete", style: "destructive", onPress: async () => { try { await api.del(`/courses/${id}`); load(); } catch (error) { reportFailure(error); } } },
     ]);
   };
 
@@ -185,7 +215,7 @@ export default function Courses() {
       <View style={{ paddingTop: insets.top, backgroundColor: colors.charcoal }} />
       <ScreenHeader overline="COURSES" title="Golf Courses" onHome={() => router.push("/")} testID="courses-screen" />
       <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40, gap: 12 }}>
-        <View style={{ flexDirection: "row", gap: 10 }}>
+        {canEdit && <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
           <Pressable style={[styles.newBtn, { flex: 1 }]} onPress={() => setShowNew(true)} testID="new-course-btn">
             <Ionicons name="add" size={18} color="#fff" />
             <Text style={styles.newBtnTxt}>NEW COURSE</Text>
@@ -194,16 +224,24 @@ export default function Courses() {
             <Ionicons name="download" size={18} color={colors.green} />
             <Text style={styles.importBtnTxt}>IMPORT</Text>
           </Pressable>
-        </View>
+        </View>}
         <Pressable style={styles.phBtn} onPress={() => router.push("/ph-courses")} testID="browse-ph-courses-btn">
           <Ionicons name="flag" size={18} color={colors.gold} />
           <Text style={styles.phBtnTxt}>BROWSE PHILIPPINE COURSES</Text>
           <Ionicons name="chevron-forward" size={16} color="rgba(255,255,255,0.5)" />
         </Pressable>
-        {courses.some((c) => !c.isDemo && c.layoutSource !== "mapped") && (
-          <Pressable style={styles.regeoBtn} onPress={regeocode} testID="regeocode-all-btn">
+        {!!loadError && <Text accessibilityLiveRegion="polite" style={styles.notice} testID="courses-load-error">{loadError}</Text>}
+        {!canEdit && <View style={styles.noticeBox} testID="courses-access-notice">
+          <Text style={styles.notice}>{!serviceSession.token ? "Sign in to load online courses. You can browse the Philippine directory without an account." : role === "player" ? "Player account: browse and play available courses. Mapping and course location changes require an authorized editor." : checkingAccess ? "Checking account permissions..." : accessError || "Editor controls are unavailable until your account permissions can be checked online."}</Text>
+          <Pressable accessibilityRole="button" onPress={() => router.push("/account")}><Text style={styles.accountLink}>GOLF ACCOUNT</Text></Pressable>
+        </View>}
+        {canEdit && <Text style={styles.notice} testID="courses-editor-access">Editor account: course mapping tools enabled.</Text>}
+        <Text style={styles.notice}>A course pin is not a hole map. Green distances require reviewed playing geometry. Location searches do not create that geometry.</Text>
+        <Pressable accessibilityRole="button" testID="courses-refresh" disabled={checkingAccess} onPress={() => { void load();void refreshAccess(); }}><Text style={styles.accountLink}>REFRESH COURSES & ACCESS</Text></Pressable>
+        {canEdit && courses.some((c) => !c.isDemo && c.layoutSource !== "mapped") && (
+          <Pressable style={[styles.regeoBtn, geocoding && { opacity: 0.5 }]} disabled={geocoding} onPress={regeocode} testID="regeocode-all-btn">
             <Ionicons name="navigate-circle" size={18} color={colors.green} />
-            <Text style={styles.regeoTxt}>RE-GEOCODE ALL COURSES</Text>
+            <Text style={styles.regeoTxt}>{geocoding ? "STARTING LOCATION SEARCHES..." : "UPDATE COURSE PINS"}</Text>
           </Pressable>
         )}
         {offlineSupported && courses.length > 0 && courses.some((c) => !offlineIds.has(c.id)) && (
@@ -229,12 +267,12 @@ export default function Courses() {
             <Text style={styles.cMeta}>{c.location} · {c.holeCount} holes {c.isDemo ? "· DEMO DATA" : ""}</Text>
             <MapBadge course={c} style={{ marginTop: 8 }} testID={`course-badge-${c.id}`} />
             <LayoutAccuracy course={c} style={{ marginTop: 6 }} testID={`course-accuracy-${c.id}`} />
-            <View style={{ flexDirection: "row", gap: 8, marginTop: 12 }}>
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 12 }}>
               <Pressable style={styles.playBtn} testID={`course-play-${c.id}`} onPress={async () => { await storage.setItem("sg_quick_course", c.id); router.push("/play"); }}>
                 <Ionicons name="locate" size={16} color="#fff" />
                 <Text style={styles.playTxt}>PLAY</Text>
               </Pressable>
-              <Pressable style={styles.editBtn} testID={`course-edit-${c.id}`} onPress={() => router.push(`/courses/${c.id}/edit`)}>
+              {canEdit && <><Pressable style={styles.editBtn} testID={`course-edit-${c.id}`} onPress={() => router.push(`/courses/${c.id}/edit`)}>
                 <Ionicons name="pencil" size={16} color={colors.charcoal} />
                 <Text style={styles.editTxt}>EDIT</Text>
               </Pressable>
@@ -242,14 +280,15 @@ export default function Courses() {
                 <Ionicons name="share-social" size={16} color={colors.charcoal} />
                 <Text style={styles.editTxt}>SHARE</Text>
               </Pressable>
-              {!c.isDemo && c.layoutSource !== "mapped" && (
-                <Pressable style={styles.editBtn} testID={`course-locate-${c.id}`} onPress={() => router.push(`/courses/${c.id}/locate`)}>
+              </>}
+              {canEdit && !c.isDemo && c.layoutSource !== "mapped" && (
+                <Pressable accessibilityLabel={`Confirm location of ${c.name}`} style={styles.editBtn} testID={`course-locate-${c.id}`} onPress={() => router.push(`/courses/${c.id}/locate`)}>
                   <Ionicons name="location" size={16} color={colors.charcoal} />
                 </Pressable>
               )}
-              <Pressable style={styles.delBtn} testID={`course-delete-${c.id}`} onPress={() => remove(c.id)}>
+              {canEdit && <Pressable accessibilityLabel={`Delete ${c.name}`} style={styles.delBtn} testID={`course-delete-${c.id}`} onPress={() => remove(c.id)}>
                 <Ionicons name="trash" size={16} color={colors.red} />
-              </Pressable>
+              </Pressable>}
             </View>
             {offlineSupported && (() => {
               const done = offlineIds.has(c.id);
@@ -315,14 +354,14 @@ export default function Courses() {
 }
 
 const styles = StyleSheet.create({
-  newBtn: { height: 56, borderRadius: 18, backgroundColor: colors.green, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
+  newBtn: { minWidth: 160, minHeight: 56, paddingVertical: 12, borderRadius: 18, backgroundColor: colors.green, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
   newBtnTxt: { color: "#fff", fontWeight: "900", letterSpacing: 1.5 },
-  importBtn: { height: 56, paddingHorizontal: 18, borderRadius: 18, backgroundColor: "#fff", borderWidth: 1, borderColor: colors.green, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 },
+  importBtn: { minHeight: 56, paddingVertical: 12, paddingHorizontal: 18, borderRadius: 18, backgroundColor: "#fff", borderWidth: 1, borderColor: colors.green, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 },
   importBtnTxt: { color: colors.green, fontWeight: "900", letterSpacing: 1.5 },
-  phBtn: { height: 52, borderRadius: 16, backgroundColor: colors.charcoal, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, paddingHorizontal: 16 },
-  phBtnTxt: { color: "#fff", fontWeight: "900", letterSpacing: 1, fontSize: 13 },
-  regeoBtn: { height: 48, borderRadius: 14, backgroundColor: "rgba(20,83,45,0.08)", borderWidth: 1, borderColor: colors.green, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
-  regeoTxt: { color: colors.green, fontWeight: "900", letterSpacing: 0.5, fontSize: 12 },
+  phBtn: { minHeight: 52, paddingVertical: 12, borderRadius: 16, backgroundColor: colors.charcoal, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, paddingHorizontal: 16 },
+  phBtnTxt: { flexShrink: 1, color: "#fff", fontWeight: "900", letterSpacing: 1, fontSize: 13 },
+  regeoBtn: { minHeight: 48, paddingVertical: 12, paddingHorizontal: 12, borderRadius: 14, backgroundColor: "rgba(20,83,45,0.08)", borderWidth: 1, borderColor: colors.green, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
+  regeoTxt: { flexShrink: 1, color: colors.green, fontWeight: "900", letterSpacing: 0.5, fontSize: 12 },
   saveAllBtn: { height: 48, borderRadius: 14, backgroundColor: "rgba(20,83,45,0.08)", borderWidth: 1, borderColor: colors.green, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
   saveAllTxt: { color: colors.green, fontWeight: "900", letterSpacing: 0.5, fontSize: 12 },
   storageRow: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: "#fff", borderWidth: 1, borderColor: colors.zinc200, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 10 },
@@ -333,9 +372,12 @@ const styles = StyleSheet.create({
   card: { backgroundColor: "#fff", borderWidth: 1, borderColor: colors.zinc200, borderRadius: 18, padding: 16 },
   cName: { fontWeight: "800", fontSize: 15, color: colors.charcoal },
   cMeta: { fontSize: 11, color: colors.zinc400, fontWeight: "700", marginTop: 2 },
-  playBtn: { flex: 1, height: 44, borderRadius: 12, backgroundColor: colors.green, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 },
+  noticeBox: { backgroundColor: "#fff", borderRadius: 12, padding: 12, gap: 10 },
+  notice: { color: colors.zinc600, fontSize: 13, lineHeight: 20 },
+  accountLink: { color: colors.green, fontWeight: "800", paddingVertical: 8 },
+  playBtn: { minWidth: 100, minHeight: 48, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12, backgroundColor: colors.green, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 },
   playTxt: { color: "#fff", fontSize: 12, fontWeight: "900" },
-  editBtn: { height: 44, paddingHorizontal: 16, borderRadius: 12, backgroundColor: colors.zinc100, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 },
+  editBtn: { minHeight: 48, paddingVertical: 10, paddingHorizontal: 16, borderRadius: 12, backgroundColor: colors.zinc100, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 },
   editTxt: { fontSize: 12, fontWeight: "900", color: colors.charcoal },
   delBtn: { height: 44, width: 44, borderRadius: 12, backgroundColor: "#FEE2E2", alignItems: "center", justifyContent: "center" },
   offlineRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: colors.zinc100 },
